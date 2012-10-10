@@ -6,8 +6,9 @@
 /* This file (utils.js) is compiled from utils.co. Please view the
 original commented source there. */
 
-# convenience method to make array from arguments
-export floats = -> new Float32Array @@
+"use strict"
 
 Matrix:: <<<
   floats:~ -> new Float32Array @flatten!
+
+

@@ -6,6 +6,8 @@
 /* This file (webjelly.js) is compiled from webjelly.co. Please view the
 original commented source there. */
 
+"use strict"
+
 canvas = document.getElementById \canvas
 
 try
@@ -16,30 +18,35 @@ if gl!?
     disabled!"
   throw new Error "no webgl ;_;"
 
-# load constants into window for easier access
+# I don't like typing in gl all the time, so I will attach everything to the
+# global context. Don't do this at home, kids.
 for k, v in gl
-  window[k] = v if /^[A-Z_]+$/.test k # SNAKE_CAPS constants
+  window[k] =
+    if typeof v is \function
+      v.bind gl
+    else
+      v
 
-gl
-  &clearColor 0 0 0 1 # black
-  &enable     DEPTH_TEST
-  &depthFunc  LEQUAL
-  &clear      COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT
+# init the shader program
+clearColor 0 0 0 1 # black
+enable     DEPTH_TEST
+depthFunc  LEQUAL
+clear      COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT
 
-fragment-shader = gl.createShader FRAGMENT_SHADER
-  gl.shaderSource (&), """
+fragment-shader = createShader FRAGMENT_SHADER
+  shaderSource (&), """
 
     void main(void) {
       gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
     }
 
   """
-  gl.compileShader(&)
-  unless gl.getShaderParameter (&), COMPILE_STATUS
+  compileShader(&)
+  unless getShaderParameter (&), COMPILE_STATUS
     throw new Error "couldn't compile fragment shader!"
 
-vertex-shader = gl.createShader VERTEX_SHADER
-  gl.shaderSource (&), """
+vertex-shader = createShader VERTEX_SHADER
+  shaderSource (&), """
 
     attribute vec3 aVertexPosition;
 
@@ -50,45 +57,55 @@ vertex-shader = gl.createShader VERTEX_SHADER
       gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
     }
   """
-  gl.compileShader (&)
-  unless gl.getShaderParameter (&), COMPILE_STATUS
+  compileShader (&)
+  unless getShaderParameter (&), COMPILE_STATUS
     throw new Error "couldn't compile vertex shader!"
 
-program = gl.createProgram!
-  gl.attachShader (&), vertex-shader
-  gl.attachShader (&), fragment-shader
-  gl.linkProgram (&)
-  unless gl.getProgramParameter (&), LINK_STATUS
+program = createProgram!
+  attachShader (&), vertex-shader
+  attachShader (&), fragment-shader
+  linkProgram (&)
+  unless getProgramParameter (&), LINK_STATUS
     throw new Error "couldn't intialize shader program!"
-  gl.useProgram (&)
+  useProgram (&)
 
-vertex-position-attribute = gl.getAttribLocation program, \aVertexPosition
-  gl.enableVertexAttribArray (&)
+# draw the model from the input file of triangles and vertices
+draw = !(triangles, vertices) ->
 
-square-verticies-buffer = gl.createBuffer!
-  gl.bindBuffer ARRAY_BUFFER, (&)
+  vertices-buffer = createBuffer!
+    bindBuffer ARRAY_BUFFER, (&)
+    bufferData ARRAY_BUFFER, vertices, STATIC_DRAW
 
-vertices = floats do
-  1    1    0
-  -1   1    0
-  1    -1   0
-  -1   -1   0
+  getAttribLocation program, \aVertexPosition
+    enableVertexAttribArray (&)
+    vertexAttribPointer (&), 3, FLOAT, false 0 0
 
-gl.bufferData ARRAY_BUFFER, vertices, STATIC_DRAW
+  uniformMatrix4fv do
+    getUniformLocation program, \uPMatrix
+    false
+    makePerspective 45 640/480 0.1 100 .floats
 
-perspective-matrix = makePerspective 45 640/480 0.1 100
+  uniformMatrix4fv do
+    getUniformLocation program, \uMVMatrix
+    false
+    (Matrix.I 4).x (Matrix.Translation $V [0 0 -6] .ensure4x4!) .floats
 
-mvMatrix = Matrix.I 4
-mvMatrix.=x do
-  Matrix.Translation $V [0 0 -6] .ensure4x4!
+  drawArrays TRIANGLES, 0 vertices.length
 
-gl.vertexAttribPointer vertex-position-attribute, 3, FLOAT, false 0 0
+# read the input file
+parse = !->
+  if @files.0
+    new FileReader
+      &readAsText that
+      &onload = !->
+        tokens = @result.split /\s+/ .map parseFloat
+        [num-triangles, num-vertices] = tokens.splice 0, 2
 
-pUniform = gl.getUniformLocation program, \uPMatrix
-gl.uniformMatrix4fv pUniform, false, perspective-matrix.floats
+        draw do
+          tokens.splice 0 num-triangles * 3
+          new Float32Array do tokens.splice 0 num-vertices * 3
 
-mvUniform = gl.getUniformLocation program, \uMVMatrix
-gl.uniformMatrix4fv mvUniform, false, mvMatrix.floats
-
-gl.drawArrays TRIANGLE_STRIP, 0 4
-
+document.getElementById \file
+  &addEventListener \change parse
+  # on refresh, if some file is still selected, do parse
+  parse.call (&)

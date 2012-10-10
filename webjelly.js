@@ -1,7 +1,8 @@
 /* This file (webjelly.js) is compiled from webjelly.co. Please view the
 original commented source there. */
 (function(){
-  var canvas, gl, k, v, x$, fragmentShader, vertexShader, program, vertexPositionAttribute, squareVerticiesBuffer, vertices, perspectiveMatrix, mvMatrix, pUniform, mvUniform;
+  "use strict";
+  var canvas, gl, k, v, x$, fragmentShader, vertexShader, program, draw, parse;
   canvas = document.getElementById('canvas');
   try {
     gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
@@ -12,48 +13,58 @@ original commented source there. */
   }
   for (k in gl) {
     v = gl[k];
-    if (/^[A-Z_]+$/.test(k)) {
-      window[k] = v;
-    }
+    window[k] = typeof v === 'function' ? v.bind(gl) : v;
   }
-  x$ = gl;
-  x$.clearColor(0, 0, 0, 1);
-  x$.enable(DEPTH_TEST);
-  x$.depthFunc(LEQUAL);
-  x$.clear(COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT);
-  x$ = fragmentShader = gl.createShader(FRAGMENT_SHADER);
-  gl.shaderSource(x$, "\nvoid main(void) {\n  gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);\n}\n");
-  gl.compileShader(x$);
-  if (!gl.getShaderParameter(x$, COMPILE_STATUS)) {
+  clearColor(0, 0, 0, 1);
+  enable(DEPTH_TEST);
+  depthFunc(LEQUAL);
+  clear(COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT);
+  x$ = fragmentShader = createShader(FRAGMENT_SHADER);
+  shaderSource(x$, "\nvoid main(void) {\n  gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);\n}\n");
+  compileShader(x$);
+  if (!getShaderParameter(x$, COMPILE_STATUS)) {
     throw new Error("couldn't compile fragment shader!");
   }
-  x$ = vertexShader = gl.createShader(VERTEX_SHADER);
-  gl.shaderSource(x$, "\nattribute vec3 aVertexPosition;\n\nuniform mat4 uMVMatrix;\nuniform mat4 uPMatrix;\n\nvoid main(void) {\n  gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);\n}");
-  gl.compileShader(x$);
-  if (!gl.getShaderParameter(x$, COMPILE_STATUS)) {
+  x$ = vertexShader = createShader(VERTEX_SHADER);
+  shaderSource(x$, "\nattribute vec3 aVertexPosition;\n\nuniform mat4 uMVMatrix;\nuniform mat4 uPMatrix;\n\nvoid main(void) {\n  gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);\n}");
+  compileShader(x$);
+  if (!getShaderParameter(x$, COMPILE_STATUS)) {
     throw new Error("couldn't compile vertex shader!");
   }
-  x$ = program = gl.createProgram();
-  gl.attachShader(x$, vertexShader);
-  gl.attachShader(x$, fragmentShader);
-  gl.linkProgram(x$);
-  if (!gl.getProgramParameter(x$, LINK_STATUS)) {
+  x$ = program = createProgram();
+  attachShader(x$, vertexShader);
+  attachShader(x$, fragmentShader);
+  linkProgram(x$);
+  if (!getProgramParameter(x$, LINK_STATUS)) {
     throw new Error("couldn't intialize shader program!");
   }
-  gl.useProgram(x$);
-  x$ = vertexPositionAttribute = gl.getAttribLocation(program, 'aVertexPosition');
-  gl.enableVertexAttribArray(x$);
-  x$ = squareVerticiesBuffer = gl.createBuffer();
-  gl.bindBuffer(ARRAY_BUFFER, x$);
-  vertices = floats(1, 1, 0, -1, 1, 0, 1, -1, 0, -1, -1, 0);
-  gl.bufferData(ARRAY_BUFFER, vertices, STATIC_DRAW);
-  perspectiveMatrix = makePerspective(45, 640 / 480, 0.1, 100);
-  mvMatrix = Matrix.I(4);
-  mvMatrix = mvMatrix.x(Matrix.Translation($V([0, 0, -6])).ensure4x4());
-  gl.vertexAttribPointer(vertexPositionAttribute, 3, FLOAT, false, 0, 0);
-  pUniform = gl.getUniformLocation(program, 'uPMatrix');
-  gl.uniformMatrix4fv(pUniform, false, perspectiveMatrix.floats);
-  mvUniform = gl.getUniformLocation(program, 'uMVMatrix');
-  gl.uniformMatrix4fv(mvUniform, false, mvMatrix.floats);
-  gl.drawArrays(TRIANGLE_STRIP, 0, 4);
+  useProgram(x$);
+  draw = function(triangles, vertices){
+    var x$, verticesBuffer;
+    x$ = verticesBuffer = createBuffer();
+    bindBuffer(ARRAY_BUFFER, x$);
+    bufferData(ARRAY_BUFFER, vertices, STATIC_DRAW);
+    x$ = getAttribLocation(program, 'aVertexPosition');
+    enableVertexAttribArray(x$);
+    vertexAttribPointer(x$, 3, FLOAT, false, 0, 0);
+    uniformMatrix4fv(getUniformLocation(program, 'uPMatrix'), false, makePerspective(45, 640 / 480, 0.1, 100).floats);
+    uniformMatrix4fv(getUniformLocation(program, 'uMVMatrix'), false, Matrix.I(4).x(Matrix.Translation($V([0, 0, -6])).ensure4x4()).floats);
+    drawArrays(TRIANGLES, 0, vertices.length);
+  };
+  parse = function(){
+    var that, x$;
+    if (that = this.files[0]) {
+      x$ = new FileReader;
+      x$.readAsText(that);
+      x$.onload = function(){
+        var tokens, ref$, numTriangles, numVertices;
+        tokens = this.result.split(/\s+/).map(parseFloat);
+        ref$ = tokens.splice(0, 2), numTriangles = ref$[0], numVertices = ref$[1];
+        draw(tokens.splice(0, numTriangles * 3), new Float32Array(tokens.splice(0, numVertices * 3)()));
+      };
+    }
+  };
+  x$ = document.getElementById('file');
+  x$.addEventListener('change', parse);
+  parse.call(x$);
 }).call(this);
