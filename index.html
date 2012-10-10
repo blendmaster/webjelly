@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang=en>
+<meta charset=utf-8>
+<title>Webjelly: 3D strong</title>
+
+<h1>Webjelly</h1>
+
+<p>Webjelly renders things! Try it out!
+<p>Select an input file:
+  <input type=file id=file>
+
+<div id=controls>
+  <button id=zoom-in type=button>Zoom in</button>
+  <button id=zoom-out type=button>Zoom out</button>
+  <span>Shading:
+    <label><input id=flat type=radio name=shading>Flat</label>
+    <label><input id=gouraud type=radio name=shading>Gouraud</label>
+  </span>
+  <span>, Triangle Orientation:
+    <label><input id=front type=radio name=orientation>Front</label>
+    <label><input id=back type=radio name=orientation>Back</label>
+  </span>
+</div>
+
+<div>
+  <canvas id=canvas width=500 height=500>
+    Oh gosh, your browser doesn't support canvas ;_;
+  </canvas>
+</div>
+
+<small>
+  &copy; 2012 Steven Ruppert. You can also view
+  <a href=https://github.com/blendmaster/webjelly>webjelly on Github</a>.
+<small>
+
+<script src=webjelly.js></script>
