@@ -2,6 +2,93 @@
 # Author: Steven Ruppert
 # For the Fall 2012 CSCI441 Graphics class at Colorado School of Mines
 
-# this comment appears in the compiled source: 
+# this comment appears in the compiled source:
 /* This file (webjelly.js) is compiled from webjelly.co. Please view the
 original commented source there. */
+
+canvas = document.getElementById \canvas
+
+try
+  gl = canvas.getContext \webgl or canvas.getContext \experimental-webgl
+
+if gl!?
+  alert "Sorry, it looks like your browser doesn't support WebGL, or webGL is
+    disabled!"
+  throw new Error "no webgl ;_;"
+
+# load constants into window for easier access
+for k, v in gl
+  window[k] = v if /^[A-Z_]+$/.test k # SNAKE_CAPS constants
+
+gl
+  &clearColor 0 0 0 1 # black
+  &enable     DEPTH_TEST
+  &depthFunc  LEQUAL
+  &clear      COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT
+
+fragment-shader = gl.createShader FRAGMENT_SHADER
+  gl.shaderSource (&), """
+
+    void main(void) {
+      gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+    }
+
+  """
+  gl.compileShader(&)
+  unless gl.getShaderParameter (&), COMPILE_STATUS
+    throw new Error "couldn't compile fragment shader!"
+
+vertex-shader = gl.createShader VERTEX_SHADER
+  gl.shaderSource (&), """
+
+    attribute vec3 aVertexPosition;
+
+    uniform mat4 uMVMatrix;
+    uniform mat4 uPMatrix;
+
+    void main(void) {
+      gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    }
+  """
+  gl.compileShader (&)
+  unless gl.getShaderParameter (&), COMPILE_STATUS
+    throw new Error "couldn't compile vertex shader!"
+
+program = gl.createProgram!
+  gl.attachShader (&), vertex-shader
+  gl.attachShader (&), fragment-shader
+  gl.linkProgram (&)
+  unless gl.getProgramParameter (&), LINK_STATUS
+    throw new Error "couldn't intialize shader program!"
+  gl.useProgram (&)
+
+vertex-position-attribute = gl.getAttribLocation program, \aVertexPosition
+  gl.enableVertexAttribArray (&)
+
+square-verticies-buffer = gl.createBuffer!
+  gl.bindBuffer ARRAY_BUFFER, (&)
+
+vertices = floats do
+  1    1    0
+  -1   1    0
+  1    -1   0
+  -1   -1   0
+
+gl.bufferData ARRAY_BUFFER, vertices, STATIC_DRAW
+
+perspective-matrix = makePerspective 45 640/480 0.1 100
+
+mvMatrix = Matrix.I 4
+mvMatrix.=x do
+  Matrix.Translation $V [0 0 -6] .ensure4x4!
+
+gl.vertexAttribPointer vertex-position-attribute, 3, FLOAT, false 0 0
+
+pUniform = gl.getUniformLocation program, \uPMatrix
+gl.uniformMatrix4fv pUniform, false, perspective-matrix.floats
+
+mvUniform = gl.getUniformLocation program, \uMVMatrix
+gl.uniformMatrix4fv mvUniform, false, mvMatrix.floats
+
+gl.drawArrays TRIANGLE_STRIP, 0 4
+

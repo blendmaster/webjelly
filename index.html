@@ -3,6 +3,10 @@
 <meta charset=utf-8>
 <title>Webjelly: 3D strong</title>
 
+<style>
+  input, button, label { cursor: pointer }
+</style>
+
 <h1>Webjelly</h1>
 
 <p>Webjelly renders things! Try it out!
@@ -14,10 +18,10 @@
   <button id=zoom-out type=button>Zoom out</button>
   <span>Shading:
     <label><input id=flat type=radio name=shading>Flat</label>
-    <label><input id=gouraud type=radio name=shading>Gouraud</label>
+    <label><input id=gouraud type=radio name=shading checked>Gouraud</label>
   </span>
   <span>, Triangle Orientation:
-    <label><input id=front type=radio name=orientation>Front</label>
+    <label><input id=front type=radio name=orientation checked>Front</label>
     <label><input id=back type=radio name=orientation>Back</label>
   </span>
 </div>
@@ -31,6 +35,15 @@
 <small>
   &copy; 2012 Steven Ruppert. You can also view
   <a href=https://github.com/blendmaster/webjelly>webjelly on Github</a>.
-<small>
+</small>
 
+<script src=sylvester.js>
+  // Matrix library
+  // http://sylvester.jcoglan.com/
+</script>
+<script src=glUtils.js>
+  // WebGL Utility functions
+  // https://developer.mozilla.org/en-US/docs/WebGL/Adding_2D_content_to_a_WebGL_context
+</script>
+<script src=utils.js></script>
 <script src=webjelly.js></script>

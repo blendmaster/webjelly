@@ -1,0 +1,13 @@
+# Webjelly utility functions
+# Author: Steven Ruppert
+# For the Fall 2012 CSCI441 Graphics class at Colorado School of Mines
+
+# this comment appears in the compiled source:
+/* This file (utils.js) is compiled from utils.co. Please view the
+original commented source there. */
+
+# convenience method to make array from arguments
+export floats = -> new Float32Array @@
+
+Matrix:: <<<
+  floats:~ -> new Float32Array @flatten!
