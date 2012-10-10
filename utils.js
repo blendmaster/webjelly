@@ -2,11 +2,7 @@
 original commented source there. */
 (function(){
   "use strict";
-  Object.defineProperty(Matrix.prototype, 'floats', {
-    get: function(){
-      return new Float32Array(this.flatten());
-    },
-    configurable: true,
-    enumerable: true
-  });
+  mat4.translation = function(x, y, z){
+    return mat4.translate(mat4.identity(), [x, y, z]);
+  };
 }).call(this);

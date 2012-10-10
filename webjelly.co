@@ -9,9 +9,10 @@ original commented source there. */
 "use strict"
 
 canvas = document.getElementById \canvas
+{width, height} = canvas
 
 try
-  gl = canvas.getContext \webgl or canvas.getContext \experimental-webgl
+  window.gl = canvas.getContext \webgl or canvas.getContext \experimental-webgl
 
 if gl!?
   alert "Sorry, it looks like your browser doesn't support WebGL, or webGL is
@@ -28,6 +29,7 @@ for k, v in gl
       v
 
 # init the shader program
+viewport   0 0 width, height
 clearColor 0 0 0 1 # black
 enable     DEPTH_TEST
 depthFunc  LEQUAL
@@ -48,13 +50,13 @@ fragment-shader = createShader FRAGMENT_SHADER
 vertex-shader = createShader VERTEX_SHADER
   shaderSource (&), """
 
-    attribute vec3 aVertexPosition;
+    attribute vec3 position;
 
-    uniform mat4 uMVMatrix;
-    uniform mat4 uPMatrix;
+    uniform mat4 modelView;
+    uniform mat4 projection;
 
     void main(void) {
-      gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+      gl_Position = projection * modelView * vec4(position, 1.0);
     }
   """
   compileShader (&)
@@ -76,19 +78,25 @@ draw = !(triangles, vertices) ->
     bindBuffer ARRAY_BUFFER, (&)
     bufferData ARRAY_BUFFER, vertices, STATIC_DRAW
 
-  getAttribLocation program, \aVertexPosition
+  getAttribLocation program, \position
     enableVertexAttribArray (&)
     vertexAttribPointer (&), 3, FLOAT, false 0 0
 
-  uniformMatrix4fv do
-    getUniformLocation program, \uPMatrix
-    false
-    makePerspective 45 640/480 0.1 100 .floats
+  # set matrix uniforms
 
   uniformMatrix4fv do
-    getUniformLocation program, \uMVMatrix
+    getUniformLocation program, \perspective
     false
-    (Matrix.I 4).x (Matrix.Translation $V [0 0 -6] .ensure4x4!) .floats
+    mat4.perspective do
+      45
+      width / height
+      0.1
+      100
+
+  uniformMatrix4fv do
+    getUniformLocation program, \modelView
+    false
+    mat4.translation 0 0 -6
 
   drawArrays TRIANGLES, 0 vertices.length
 
@@ -103,7 +111,7 @@ parse = !->
 
         draw do
           tokens.splice 0 num-triangles * 3
-          new Float32Array do tokens.splice 0 num-vertices * 3
+          new Float32Array tokens.splice 0 num-vertices * 3
 
 document.getElementById \file
   &addEventListener \change parse

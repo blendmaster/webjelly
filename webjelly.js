@@ -2,19 +2,21 @@
 original commented source there. */
 (function(){
   "use strict";
-  var canvas, gl, k, v, x$, fragmentShader, vertexShader, program, draw, parse;
+  var canvas, width, height, k, ref$, v, x$, fragmentShader, vertexShader, program, draw, parse;
   canvas = document.getElementById('canvas');
+  width = canvas.width, height = canvas.height;
   try {
-    gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    window.gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
   } catch (e$) {}
-  if (gl == null) {
+  if (typeof gl == 'undefined' || gl === null) {
     alert("Sorry, it looks like your browser doesn't support WebGL, or webGL isdisabled!");
     throw new Error("no webgl ;_;");
   }
-  for (k in gl) {
-    v = gl[k];
+  for (k in ref$ = gl) {
+    v = ref$[k];
     window[k] = typeof v === 'function' ? v.bind(gl) : v;
   }
+  viewport(0, 0, width, height);
   clearColor(0, 0, 0, 1);
   enable(DEPTH_TEST);
   depthFunc(LEQUAL);
@@ -26,7 +28,7 @@ original commented source there. */
     throw new Error("couldn't compile fragment shader!");
   }
   x$ = vertexShader = createShader(VERTEX_SHADER);
-  shaderSource(x$, "\nattribute vec3 aVertexPosition;\n\nuniform mat4 uMVMatrix;\nuniform mat4 uPMatrix;\n\nvoid main(void) {\n  gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);\n}");
+  shaderSource(x$, "\nattribute vec3 position;\n\nuniform mat4 modelView;\nuniform mat4 projection;\n\nvoid main(void) {\n  gl_Position = projection * modelView * vec4(position, 1.0);\n}");
   compileShader(x$);
   if (!getShaderParameter(x$, COMPILE_STATUS)) {
     throw new Error("couldn't compile vertex shader!");
@@ -44,11 +46,11 @@ original commented source there. */
     x$ = verticesBuffer = createBuffer();
     bindBuffer(ARRAY_BUFFER, x$);
     bufferData(ARRAY_BUFFER, vertices, STATIC_DRAW);
-    x$ = getAttribLocation(program, 'aVertexPosition');
+    x$ = getAttribLocation(program, 'position');
     enableVertexAttribArray(x$);
     vertexAttribPointer(x$, 3, FLOAT, false, 0, 0);
-    uniformMatrix4fv(getUniformLocation(program, 'uPMatrix'), false, makePerspective(45, 640 / 480, 0.1, 100).floats);
-    uniformMatrix4fv(getUniformLocation(program, 'uMVMatrix'), false, Matrix.I(4).x(Matrix.Translation($V([0, 0, -6])).ensure4x4()).floats);
+    uniformMatrix4fv(getUniformLocation(program, 'perspective'), false, mat4.perspective(45, width / height, 0.1, 100));
+    uniformMatrix4fv(getUniformLocation(program, 'modelView'), false, mat4.translation(0, 0, -6));
     drawArrays(TRIANGLES, 0, vertices.length);
   };
   parse = function(){
@@ -60,7 +62,7 @@ original commented source there. */
         var tokens, ref$, numTriangles, numVertices;
         tokens = this.result.split(/\s+/).map(parseFloat);
         ref$ = tokens.splice(0, 2), numTriangles = ref$[0], numVertices = ref$[1];
-        draw(tokens.splice(0, numTriangles * 3), new Float32Array(tokens.splice(0, numVertices * 3)()));
+        draw(tokens.splice(0, numTriangles * 3), new Float32Array(tokens.splice(0, numVertices * 3)));
       };
     }
   };

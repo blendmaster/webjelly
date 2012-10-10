@@ -8,7 +8,7 @@ original commented source there. */
 
 "use strict"
 
-Matrix:: <<<
-  floats:~ -> new Float32Array @flatten!
-
+# shorthand for applying [x,y,z] to the identity
+mat4.translation = (x, y, z) ->
+  mat4.translate mat4.identity!, [x, y, z]
 
