@@ -217,6 +217,10 @@ draw = !(triangles, vertices)->
 
   console.log distance
 
+  rotation = mat4.rotateZ do
+    mat4.identity!
+    radians(-225deg)
+
   # set matrix uniforms
   gl.uniformMatrix4fv do
     gl.getUniformLocation program, \ProjectionMatrix
@@ -230,14 +234,14 @@ draw = !(triangles, vertices)->
   gl.uniformMatrix3fv do
     gl.getUniformLocation program, \NormalMatrix
     false
-    mat3.identity!
+    mat4.toMat3 rotation
 
   model-view = mat4.identity!
   log mat4.translate model-view, to-center
   #mat4.rotateY model-view, radians(-1.6deg)
   #mat4.rotateX model-view, radians(-1.6deg)
-  #mat4.rotateZ model-view, log radians(12deg)
-  mat4.translate model-view, [0,0, -(distance + 3)]
+  mat4.multiply model-view, rotation
+  mat4.translate model-view, [0,0, -(distance + 1)]
   mat4.scale model-view, to-stage
 
   gl.uniformMatrix4fv do
