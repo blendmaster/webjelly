@@ -25,7 +25,45 @@ if gl!?
 for k, v in gl
   window[k] = v if /^[A-Z_]+$/.test k
 
-culling-face = FRONT
+# grab control state and setup listeners
+#var shading
+
+#$ \flat
+  #if &checked
+    #shading = \flat
+  #&addEventListener \click !->
+    #shading := \flat
+    #do draw
+
+#$ \gouraud
+  #if &checked
+    #shading = \gouraud
+  #&addEventListener \click !->
+    #shading := \gouraud
+    #do draw
+
+# swap culling
+$ \front
+  if &checked
+    gl.cullFace FRONT
+  &addEventListener \click !->
+    gl.cullFace FRONT
+    do draw
+$ \back
+  if &checked
+    gl.cullFace BACK
+  &addEventListener \click !->
+    gl.cullFace BACK
+    do draw
+
+# zooming
+var fov
+$ \zoom-in .addEventListener \click !->
+  --fov
+  do draw
+$ \zoom-out .addEventListener \click !->
+  ++fov
+  do draw
 
 # set up
 gl
@@ -34,12 +72,10 @@ gl
   &disable    DEPTH_TEST
 
   &enable     CULL_FACE
-  &cullFace   culling-face
 
   &clearColor 0 0 0 1 # black
   &clear      COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT
 
-# init the shader program
 with gl
   vertex-shader = @createShader VERTEX_SHADER
     @shaderSource (&), """
@@ -71,6 +107,7 @@ with gl
   fragment-shader = @createShader FRAGMENT_SHADER
     @shaderSource (&), """
       precision mediump float;
+
       varying float NdotL;   // interpolated NdotL values (output of the vertex shader!)
       // note that interpolation qualifiers have to match between vertex and fragment shader
 
@@ -115,15 +152,11 @@ with gl
 
   @uniform3f do
     @getUniformLocation program, \LightLocation
-    200 200 200
+    -200 200 200
 
-
-
-degrees = -> it * 180 / Math.PI
-radians = -> it * Math.PI / 180
-
-calculate-normals = (triangles, vertices) ->
-  n = new Float32Array vertices.length
+calculate-normals = ->
+  #flat = new Float32Array vertices.length
+  gouraud = new Float32Array vertices.length
 
   for i from 0 to triangles.length - 3 by 3
     a = triangles[i    ] * 3
@@ -138,26 +171,44 @@ calculate-normals = (triangles, vertices) ->
       vec3.direction v0, v2, []
       []
 
-    n[a    ] += cross[0]
-    n[a + 1] += cross[1]
-    n[a + 2] += cross[2]
+    gouraud[a    ] += cross[0]
+    gouraud[a + 1] += cross[1]
+    gouraud[a + 2] += cross[2]
 
-    n[b    ] += cross[0]
-    n[b + 1] += cross[1]
-    n[b + 2] += cross[2]
+    gouraud[b    ] += cross[0]
+    gouraud[b + 1] += cross[1]
+    gouraud[b + 2] += cross[2]
 
-    n[c    ] += cross[0]
-    n[c + 1] += cross[1]
-    n[c + 2] += cross[2]
+    gouraud[c    ] += cross[0]
+    gouraud[c + 1] += cross[1]
+    gouraud[c + 2] += cross[2]
 
-  return n
+    # first to file for flat
+    #if flat[a] is 0
+      #flat[a    ] = cross[0]
+      #flat[a + 1] = cross[1]
+      #flat[a + 2] = cross[2]
+    #if flat[b] is 0
+      #flat[b    ] = cross[0]
+      #flat[b + 1] = cross[1]
+      #flat[b + 2] = cross[2]
+    #if flat[c] is 0
+      #flat[c    ] = cross[0]
+      #flat[c + 1] = cross[1]
+      #flat[c + 2] = cross[2]
+
+  return gouraud
+
+var triangles, vertices
+var vertices-buffer, normals-buffer, triangles-buffer
+var staging
+var distance, rotation, current-rot
 
 # draw the model from the input file of triangles and vertices
-draw = !(triangles, vertices)->
-  log triangles
-  log vertices
+setup-buffers = !->
 
-  normals = calculate-normals triangles, vertices
+  gouraud = do calculate-normals
+  log "normals: #gouraud"
 
   # find coordinate bounds
   minx = miny = minz = Infinity
@@ -177,18 +228,20 @@ draw = !(triangles, vertices)->
   log "max: #maxx #maxy #maxz"
 
   # transforms to center stage
-  to-center = -[(minx + maxx) / 2, (miny + maxy) / 2, (minz + maxz) / 2]
+  to-center =
+    -[(minx + maxx) / 2, (miny + maxy) / 2, (minz + maxz) / 2]
+    |> mat4.translate mat4.identity!, _
+
   to-stage =
-    Math.max(maxx - minx, maxz - miny, maxz - minz) |> 2 / _ |> [_, _, _]
-  #to-stage = [0.8, 0.8 , 0.8]
+    Math.max(maxx - minx, maxz - miny, maxz - minz)
+    |> 2 / _
+    |> log [_, _, _]
+    |> mat4.scale mat4.identity!, _
 
-  console.log to-center
-  console.log to-stage
-
-  # set up and clear screen
+  staging := mat4.multiply to-center, to-stage, mat4.create!
 
   # vertices
-  vertices-buffer = gl.createBuffer!
+  vertices-buffer := gl.createBuffer!
     gl.bindBuffer ARRAY_BUFFER, (&)
     gl.bufferData ARRAY_BUFFER, vertices, STATIC_DRAW
 
@@ -198,63 +251,63 @@ draw = !(triangles, vertices)->
       gl.vertexAttribPointer (&), 3, FLOAT, false 0 0
 
   # normals
-  normals-buffer = gl.createBuffer!
+  normals-buffer := gl.createBuffer!
     gl.bindBuffer ELEMENT_ARRAY_BUFFER, (&)
-    gl.bufferData ELEMENT_ARRAY_BUFFER, normals, STATIC_DRAW
+    gl.bufferData ELEMENT_ARRAY_BUFFER, gouraud, STATIC_DRAW
 
     # bind to varying normal
     gl.getAttribLocation program, \normal
       gl.enableVertexAttribArray (&)
       gl.vertexAttribPointer (&), 3, FLOAT, false 0 0
 
-  # elements
-  triangles-buffer = gl.createBuffer!
+  console.log triangles
+  triangles-buffer := gl.createBuffer!
     gl.bindBuffer ELEMENT_ARRAY_BUFFER, (&)
     gl.bufferData ELEMENT_ARRAY_BUFFER, triangles, STATIC_DRAW
 
-  fov = 15degrees
-  distance =  1 / Math.tan(radians(fov) / 2)
+  rotation := mat4.identity!
+  current-rot := mat4.identity!
+  fov := 15deg
+  distance := 1 / Math.tan(radians(fov) / 2)
 
-  console.log distance
 
-  rotation = mat4.rotateZ do
-    mat4.identity!
-    radians(-225deg)
+export draw = !->
+  gl.clear COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT
 
-  # set matrix uniforms
+  rot = mat4.multiply do
+    rotation
+    current-rot
+    mat4.create!
+
   gl.uniformMatrix4fv do
     gl.getUniformLocation program, \ProjectionMatrix
     false
     mat4.perspective do
       fov
       1 # width / height
-      log distance - 1
-      log distance + 3
+      distance - 1
+      distance + 3
 
+  # set matrix uniforms
   gl.uniformMatrix3fv do
     gl.getUniformLocation program, \NormalMatrix
     false
-    mat4.toMat3 rotation
+    mat4.toMat3 rot
 
   model-view = mat4.identity!
-  log mat4.translate model-view, to-center
-  #mat4.rotateY model-view, radians(-1.6deg)
-  #mat4.rotateX model-view, radians(-1.6deg)
-  mat4.multiply model-view, rotation
-  mat4.translate model-view, [0,0, -(distance + 1)]
-  mat4.scale model-view, to-stage
+  mat4.multiply model-view, staging
+  mat4.multiply model-view, rot
+  mat4.multiply do
+    model-view
+    mat4.translate mat4.identity!, [0,0, -(distance + 1)]
 
   gl.uniformMatrix4fv do
     gl.getUniformLocation program, \ModelViewMatrix
     false
     model-view
 
-  gl.clear COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT
-
   gl.bindBuffer ELEMENT_ARRAY_BUFFER, triangles-buffer
   gl.drawElements TRIANGLES, triangles.length, UNSIGNED_SHORT, 0
-
-log = -> console.log it; it
 
 # read the input file
 parse = !->
@@ -265,11 +318,68 @@ parse = !->
         tokens = @result.split /\s+/ .map parseFloat
         [num-triangles, num-vertices] = tokens.splice 0, 2
 
-        draw do
-          new Uint16Array tokens.splice 0 num-triangles * 3
-          new Float32Array tokens.splice 0 num-vertices * 3
+        triangles := new Uint16Array tokens.splice 0 num-triangles * 3
+        vertices := new Float32Array tokens.splice 0 num-vertices * 3
 
-document.getElementById \file
+        do setup-buffers
+        do draw
+
+$ \file
   &addEventListener \change parse
   # on refresh, if some file is still selected, do parse
   parse.call (&)
+
+point-under = (x,y) ->
+  {left, top} = canvas.getBoundingClientRect!
+
+  # normalize to [-1, 1]
+  x = (x - left) * 2 / (width - 1) - 1
+  y = -((y - top) * 2 / (height - 1) - 1)
+
+  det = 1 - x*x - y*y
+
+  if det >= 0
+    [x, y, Math.sqrt det]
+  else
+    [x / Math.sqrt(x*x + y*y), y / Math.sqrt(x*x + y*y), 0]
+
+# mouse rotation
+canvas
+  &addEventListener \mousedown !({clientX: i0, clientY: j0}) ->
+    &style.cursor = \move
+
+    p = point-under i0, j0
+
+    rotate = !({clientX: i, clientY: j}) ->
+      q = point-under i, j
+      cp = vec3.direction [0 0 0] p
+      cq = vec3.direction [0 0 0] q
+
+      angle = Math.acos vec3.dot(cp, cq) / (vec3.length(cp) * vec3.length(cq))
+      axis = vec3.cross cp, cq
+
+      current-rot := mat4.rotate do
+        mat4.identity!
+        angle
+        axis
+
+      do draw
+
+    &addEventListener \mousemove rotate
+
+    stop = let ran = false
+      !->
+        if not ran
+          ran = true
+
+          mat4.multiply rotation, current-rot
+          current-rot := mat4.identity!
+
+        &style.cursor = \pointer
+        &removeEventListener \mousemove rotate
+        &removeEventListener \mouseup stop
+        &removeEventListener \mouseleave stop
+
+    &addEventListener \mouseup stop
+    &addEventListener \mouseleave stop
+

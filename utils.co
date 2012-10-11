@@ -12,3 +12,9 @@ original commented source there. */
 mat4.translation = (translation) ->
   mat4.translate mat4.identity!, translation
 
+export log = -> console.log it; it
+
+export degrees = -> it * 180 / Math.PI
+export radians = -> it * Math.PI / 180
+
+export $ = -> document.getElementById it
