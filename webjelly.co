@@ -69,7 +69,7 @@ $ \zoom-out .addEventListener \click !->
 gl
   &viewport   0 0 width, height
 
-  &disable    DEPTH_TEST
+  &enable    DEPTH_TEST
 
   &enable     CULL_FACE
 
@@ -144,7 +144,7 @@ with gl
 
   @uniform1f do
     @getUniformLocation program, \AmbientIntensity
-    0.2
+    0.1
 
   @uniform3f do
     @getUniformLocation program, \DiffuseAndAmbientCoefficient
@@ -286,7 +286,7 @@ export draw = !->
       fov
       1 # width / height
       distance - 1
-      distance + 3
+      distance + 10
 
   # set matrix uniforms
   gl.uniformMatrix3fv do
@@ -295,11 +295,12 @@ export draw = !->
     mat4.toMat3 rot
 
   model-view = mat4.identity!
-  mat4.multiply model-view, staging
-  mat4.multiply model-view, rot
   mat4.multiply do
     model-view
+    #mat4.translate mat4.identity!, [0,-1, -15]
     mat4.translate mat4.identity!, [0,0, -(distance + 1)]
+  mat4.multiply model-view, rot
+  mat4.multiply model-view, staging
 
   gl.uniformMatrix4fv do
     gl.getUniformLocation program, \ModelViewMatrix
