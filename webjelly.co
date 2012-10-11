@@ -144,15 +144,16 @@ with gl
 
   @uniform1f do
     @getUniformLocation program, \AmbientIntensity
-    0.1
+    0.2
 
   @uniform3f do
     @getUniformLocation program, \DiffuseAndAmbientCoefficient
-    1.0 1.0 1.0
+    1 1 1
+    # 0.7 0.7 0.7
 
-  @uniform3f do
+  @uniform3fv do
     @getUniformLocation program, \LightLocation
-    -200 200 200
+    [-1 -1 0]
 
 calculate-normals = ->
   #flat = new Float32Array vertices.length
@@ -199,6 +200,8 @@ calculate-normals = ->
 
   return gouraud
 
+make-flats = ->
+
 var triangles, vertices
 var vertices-buffer, normals-buffer, triangles-buffer
 var staging
@@ -206,6 +209,8 @@ var distance, rotation, current-rot
 
 # draw the model from the input file of triangles and vertices
 setup-buffers = !->
+
+  #[flat-triangles, flat-indices] = do make-flats
 
   gouraud = do calculate-normals
   log "normals: #gouraud"
@@ -228,17 +233,15 @@ setup-buffers = !->
   log "max: #maxx #maxy #maxz"
 
   # transforms to center stage
-  to-center =
-    -[(minx + maxx) / 2, (miny + maxy) / 2, (minz + maxz) / 2]
-    |> mat4.translate mat4.identity!, _
-
+  to-center = -[(minx + maxx) / 2, (miny + maxy) / 2, (minz + maxz) / 2]
   to-stage =
     Math.max(maxx - minx, maxz - miny, maxz - minz)
     |> 2 / _
-    |> log [_, _, _]
-    |> mat4.scale mat4.identity!, _
+    |> [_, _, _]
 
-  staging := mat4.multiply to-center, to-stage, mat4.create!
+  staging := mat4.identity!
+  mat4.scale staging, to-stage
+  mat4.translate staging, to-center
 
   # vertices
   vertices-buffer := gl.createBuffer!
@@ -270,23 +273,15 @@ setup-buffers = !->
   fov := 15deg
   distance := 1 / Math.tan(radians(fov) / 2)
 
-
 export draw = !->
   gl.clear COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT
 
-  rot = mat4.multiply do
-    rotation
-    current-rot
-    mat4.create!
+  rot = mat4.multiply current-rot, rotation, mat4.create!
 
   gl.uniformMatrix4fv do
     gl.getUniformLocation program, \ProjectionMatrix
     false
-    mat4.perspective do
-      fov
-      1 # width / height
-      distance - 1
-      distance + 10
+    mat4.perspective fov, width / height, distance - 1, distance + 3
 
   # set matrix uniforms
   gl.uniformMatrix3fv do
@@ -295,10 +290,7 @@ export draw = !->
     mat4.toMat3 rot
 
   model-view = mat4.identity!
-  mat4.multiply do
-    model-view
-    #mat4.translate mat4.identity!, [0,-1, -15]
-    mat4.translate mat4.identity!, [0,0, -(distance + 1)]
+  mat4.translate model-view, [0,0, -(distance + 1)]
   mat4.multiply model-view, rot
   mat4.multiply model-view, staging
 
@@ -373,7 +365,7 @@ canvas
         if not ran
           ran = true
 
-          mat4.multiply rotation, current-rot
+          mat4.multiply current-rot, rotation, rotation
           current-rot := mat4.identity!
 
         &style.cursor = \pointer

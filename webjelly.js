@@ -2,7 +2,7 @@
 original commented source there. */
 (function(){
   "use strict";
-  var canvas, width, height, k, ref$, v, x$, fov, calculateNormals, triangles, vertices, verticesBuffer, normalsBuffer, trianglesBuffer, staging, distance, rotation, currentRot, setupBuffers, draw, parse, pointUnder, out$ = typeof exports != 'undefined' && exports || this;
+  var canvas, width, height, k, ref$, v, x$, fov, calculateNormals, makeFlats, triangles, vertices, verticesBuffer, normalsBuffer, trianglesBuffer, staging, distance, rotation, currentRot, setupBuffers, draw, parse, pointUnder, out$ = typeof exports != 'undefined' && exports || this;
   canvas = document.getElementById('canvas');
   width = canvas.width, height = canvas.height;
   try {
@@ -44,7 +44,7 @@ original commented source there. */
   });
   x$ = gl;
   x$.viewport(0, 0, width, height);
-  x$.disable(DEPTH_TEST);
+  x$.enable(DEPTH_TEST);
   x$.enable(CULL_FACE);
   x$.clearColor(0, 0, 0, 1);
   x$.clear(COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT);
@@ -72,8 +72,8 @@ original commented source there. */
     this.useProgram(x$);
     this.uniform1f(this.getUniformLocation(program, 'LightIntensity'), 0.9);
     this.uniform1f(this.getUniformLocation(program, 'AmbientIntensity'), 0.2);
-    this.uniform3f(this.getUniformLocation(program, 'DiffuseAndAmbientCoefficient'), 1.0, 1.0, 1.0);
-    this.uniform3f(this.getUniformLocation(program, 'LightLocation'), -200, 200, 200);
+    this.uniform3f(this.getUniformLocation(program, 'DiffuseAndAmbientCoefficient'), 1, 1, 1);
+    this.uniform3fv(this.getUniformLocation(program, 'LightLocation'), [-1, -1, 0]);
   }.call(gl));
   calculateNormals = function(){
     var gouraud, i, to$, a, b, c, v0, v1, v2, cross;
@@ -98,8 +98,9 @@ original commented source there. */
     }
     return gouraud;
   };
+  makeFlats = function(){};
   setupBuffers = function(){
-    var gouraud, minz, miny, minx, maxz, maxy, maxx, i, to$, x$, _, toCenter, toStage, y$;
+    var gouraud, minz, miny, minx, maxz, maxy, maxx, i, to$, x$, toCenter, _, toStage, y$;
     gouraud = calculateNormals();
     log("normals: " + gouraud);
     minx = miny = minz = Infinity;
@@ -117,9 +118,11 @@ original commented source there. */
     }
     log("min: " + minx + " " + miny + " " + minz);
     log("max: " + maxx + " " + maxy + " " + maxz);
-    toCenter = (_ = [-((minx + maxx) / 2), -((miny + maxy) / 2), -((minz + maxz) / 2)], mat4.translate(mat4.identity(), _));
-    toStage = (_ = Math.max(maxx - minx, maxz - miny, maxz - minz), _ = 2 / _, _ = log([_, _, _]), mat4.scale(mat4.identity(), _));
-    staging = mat4.multiply(toCenter, toStage, mat4.create());
+    toCenter = [-((minx + maxx) / 2), -((miny + maxy) / 2), -((minz + maxz) / 2)];
+    toStage = (_ = Math.max(maxx - minx, maxz - miny, maxz - minz), _ = 2 / _, [_, _, _]);
+    staging = mat4.identity();
+    mat4.scale(staging, toStage);
+    mat4.translate(staging, toCenter);
     x$ = verticesBuffer = gl.createBuffer();
     gl.bindBuffer(ARRAY_BUFFER, x$);
     gl.bufferData(ARRAY_BUFFER, vertices, STATIC_DRAW);
@@ -144,13 +147,13 @@ original commented source there. */
   out$.draw = draw = function(){
     var rot, modelView;
     gl.clear(COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT);
-    rot = mat4.multiply(rotation, currentRot, mat4.create());
-    gl.uniformMatrix4fv(gl.getUniformLocation(program, 'ProjectionMatrix'), false, mat4.perspective(fov, 1, distance - 1, distance + 3));
+    rot = mat4.multiply(currentRot, rotation, mat4.create());
+    gl.uniformMatrix4fv(gl.getUniformLocation(program, 'ProjectionMatrix'), false, mat4.perspective(fov, width / height, distance - 1, distance + 3));
     gl.uniformMatrix3fv(gl.getUniformLocation(program, 'NormalMatrix'), false, mat4.toMat3(rot));
     modelView = mat4.identity();
-    mat4.multiply(modelView, staging);
+    mat4.translate(modelView, [0, 0, -(distance + 1)]);
     mat4.multiply(modelView, rot);
-    mat4.multiply(modelView, mat4.translate(mat4.identity(), [0, 0, -(distance + 1)]));
+    mat4.multiply(modelView, staging);
     gl.uniformMatrix4fv(gl.getUniformLocation(program, 'ModelViewMatrix'), false, modelView);
     gl.bindBuffer(ELEMENT_ARRAY_BUFFER, trianglesBuffer);
     gl.drawElements(TRIANGLES, triangles.length, UNSIGNED_SHORT, 0);
@@ -209,7 +212,7 @@ original commented source there. */
         var ran;
         if (!ran) {
           ran = true;
-          mat4.multiply(rotation, currentRot);
+          mat4.multiply(currentRot, rotation, rotation);
           currentRot = mat4.identity();
         }
         x$.style.cursor = 'pointer';
