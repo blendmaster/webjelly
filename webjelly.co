@@ -12,93 +12,149 @@ canvas = document.getElementById \canvas
 {width, height} = canvas
 
 try
-  window.gl = canvas.getContext \webgl or canvas.getContext \experimental-webgl
+  window.gl = WebGLDebugUtils.makeDebugContext do
+    canvas.getContext \webgl or canvas.getContext \experimental-webgl
 
 if gl!?
   alert "Sorry, it looks like your browser doesn't support WebGL, or webGL is
     disabled!"
   throw new Error "no webgl ;_;"
 
-# I don't like typing in gl all the time, so I will attach everything to the
+# I don't like typing in gl all the time, so I will attach CONSTANTS to the
 # global context. Don't do this at home, kids.
 for k, v in gl
-  window[k] =
-    if typeof v is \function
-      v.bind gl
-    else
-      v
+  window[k] = v if /^[A-Z_]+$/.test k
+
+# set up
+gl
+  &viewport   0 0 width, height
+  &clearColor 0 0 0 1 # black
+  &disable DEPTH_TEST
+  &disable CULL_FACE
+  &clear      COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT
 
 # init the shader program
-viewport   0 0 width, height
-clearColor 0 0 0 1 # black
-enable     DEPTH_TEST
-depthFunc  LEQUAL
-clear      COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT
+with gl
+  vertex-shader = @createShader VERTEX_SHADER
+    @shaderSource (&), """
+      attribute vec3 position;
 
-fragment-shader = createShader FRAGMENT_SHADER
-  shaderSource (&), """
+      uniform mat4 modelView;
+      uniform mat4 perspective;
 
-    void main(void) {
-      gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
-    }
+      void main(void) {
+        gl_Position = perspective * modelView * vec4(position, 1.0);
+      }
+    """
+    @compileShader (&)
+    unless @getShaderParameter (&), COMPILE_STATUS
+      throw new Error "couldn't compile vertex shader!"
 
-  """
-  compileShader(&)
-  unless getShaderParameter (&), COMPILE_STATUS
-    throw new Error "couldn't compile fragment shader!"
+  fragment-shader = @createShader FRAGMENT_SHADER
+    @shaderSource (&), """
 
-vertex-shader = createShader VERTEX_SHADER
-  shaderSource (&), """
+      void main(void) {
+        gl_FragColor = vec4(0.8, 1.0, 1.0, 1.0);
+      }
 
-    attribute vec3 position;
+    """
+    @compileShader(&)
+    unless @getShaderParameter (&), COMPILE_STATUS
+      throw new Error "couldn't compile fragment shader!"
 
-    uniform mat4 modelView;
-    uniform mat4 projection;
+  window.program = @createProgram!
+    @attachShader (&), vertex-shader
+    @attachShader (&), fragment-shader
+    @linkProgram (&)
+    unless @getProgramParameter (&), LINK_STATUS
+      throw new Error "couldn't intialize shader program!"
+    @useProgram (&)
 
-    void main(void) {
-      gl_Position = projection * modelView * vec4(position, 1.0);
-    }
-  """
-  compileShader (&)
-  unless getShaderParameter (&), COMPILE_STATUS
-    throw new Error "couldn't compile vertex shader!"
-
-program = createProgram!
-  attachShader (&), vertex-shader
-  attachShader (&), fragment-shader
-  linkProgram (&)
-  unless getProgramParameter (&), LINK_STATUS
-    throw new Error "couldn't intialize shader program!"
-  useProgram (&)
+degrees = -> it * 180 / Math.PI
+radians = -> it * Math.PI / 180
 
 # draw the model from the input file of triangles and vertices
-draw = !(triangles, vertices) ->
+draw = !(triangles, vertices)->
+  log triangles
+  log vertices
 
-  vertices-buffer = createBuffer!
-    bindBuffer ARRAY_BUFFER, (&)
-    bufferData ARRAY_BUFFER, vertices, STATIC_DRAW
+  # find coordinate bounds
+  minx = miny = minz = Infinity
+  maxx = maxy = maxz = 0
+  for i from 0 to vertices.length - 3 by 3
+    vertices[i]
+      minx <?= &
+      maxx >?= &
+    vertices[i + 1]
+      miny <?= &
+      maxy >?= &
+    vertices[i + 2]
+      minz <?= &
+      maxz >?= &
 
-  getAttribLocation program, \position
-    enableVertexAttribArray (&)
-    vertexAttribPointer (&), 3, FLOAT, false 0 0
+  log "min: #minx #miny #minz"
+  log "max: #maxx #maxy #maxz"
+
+  # transforms to center stage
+  to-center = -[(minx + maxx) / 2, (miny + maxy) / 2, (minz + maxz) / 2]
+  to-stage =
+    Math.max(maxx - minx, maxz - miny, maxz - minz) |> 2 / _ |> [_, _, _]
+  #to-stage = [0.8, 0.8 , 0.8]
+
+  console.log to-center
+  console.log to-stage
+
+  # set up and clear screen
+
+  # bind vertices
+  vertices-buffer = gl.createBuffer!
+    gl.bindBuffer ARRAY_BUFFER, (&)
+    gl.bufferData ARRAY_BUFFER, new Float32Array(vertices), STATIC_DRAW
+
+    # set as position
+    gl.getAttribLocation program, \position
+      gl.enableVertexAttribArray (&)
+      gl.vertexAttribPointer (&), 3, FLOAT, false 0 0
+
+  # elements
+  triangles-buffer = gl.createBuffer!
+    gl.bindBuffer ELEMENT_ARRAY_BUFFER, (&)
+    gl.bufferData ELEMENT_ARRAY_BUFFER, new Uint16Array(triangles), STATIC_DRAW
+
+  fov = 15degrees
+  distance =  1 / Math.tan(radians(fov) / 2)
+
+  console.log distance
 
   # set matrix uniforms
-
-  uniformMatrix4fv do
-    getUniformLocation program, \perspective
+  gl.uniformMatrix4fv do
+    gl.getUniformLocation program, \perspective
     false
     mat4.perspective do
-      45
-      width / height
-      0.1
-      100
+      fov
+      1 # width / height
+      log distance - 1
+      log distance + 3
 
-  uniformMatrix4fv do
-    getUniformLocation program, \modelView
+  model-view = mat4.identity!
+  log mat4.translate model-view, to-center
+  mat4.rotateY model-view, radians(-1.6deg)
+  #mat4.rotateX model-view, radians(-1.6deg)
+  #mat4.rotateZ model-view, log radians(12deg)
+  mat4.translate model-view, [0,0, -(distance + 1)]
+  mat4.scale model-view, to-stage
+
+  gl.uniformMatrix4fv do
+    gl.getUniformLocation program, \modelView
     false
-    mat4.translation 0 0 -6
+    model-view
 
-  drawArrays TRIANGLES, 0 vertices.length
+  gl.clear COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT
+
+  gl.bindBuffer ELEMENT_ARRAY_BUFFER, triangles-buffer
+  gl.drawElements TRIANGLES, triangles.length, UNSIGNED_SHORT, 0
+
+log = -> console.log it; it
 
 # read the input file
 parse = !->
@@ -110,7 +166,7 @@ parse = !->
         [num-triangles, num-vertices] = tokens.splice 0, 2
 
         draw do
-          tokens.splice 0 num-triangles * 3
+          new Uint16Array tokens.splice 0 num-triangles * 3
           new Float32Array tokens.splice 0 num-vertices * 3
 
 document.getElementById \file

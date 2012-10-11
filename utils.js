@@ -2,7 +2,7 @@
 original commented source there. */
 (function(){
   "use strict";
-  mat4.translation = function(x, y, z){
-    return mat4.translate(mat4.identity(), [x, y, z]);
+  mat4.translation = function(translation){
+    return mat4.translate(mat4.identity(), translation);
   };
 }).call(this);

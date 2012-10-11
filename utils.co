@@ -8,7 +8,7 @@ original commented source there. */
 
 "use strict"
 
-# shorthand for applying [x,y,z] to the identity
-mat4.translation = (x, y, z) ->
-  mat4.translate mat4.identity!, [x, y, z]
+# shorthand for applying translation to the identity
+mat4.translation = (translation) ->
+  mat4.translate mat4.identity!, translation
 
