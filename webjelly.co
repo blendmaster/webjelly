@@ -33,6 +33,7 @@ $ \flat
     shading = \flat
   &addEventListener \click !->
     shading := \flat
+    do flat-program
     do setup-buffers
     do draw
 
@@ -41,6 +42,7 @@ $ \gouraud
     shading = \gouraud
   &addEventListener \click !->
     shading := \gouraud
+    do gouraud-program
     do setup-buffers
     do draw
 
@@ -78,7 +80,88 @@ gl
   &clearColor 0 0 0 1 # black
   &clear      COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT
 
-with gl
+# OpenGL ES 2.0 doesn't support non-interpolating 'varying' variables in the shaders,
+# so the only easy way to get flat shading is to not use a point light source.
+flat-light-direction = vec3.normalize vec3.direction [-1,-1, 0] [0 0 5]
+
+flat-program = !-> with gl
+  vertex-shader = @createShader VERTEX_SHADER
+    @shaderSource (&), """
+      attribute vec3 coord;
+      attribute vec3 normal;
+
+      varying float NdotL;
+
+      uniform mat4 ModelViewMatrix;
+      uniform mat4 ProjectionMatrix;
+      uniform mat3 NormalMatrix;
+      uniform vec3 L;
+
+      void main() {
+        vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);   // convert to world coordinates
+        vec3 WorldNormal = NormalMatrix * normal;                // normal in world coordinates
+        vec3 N = normalize(WorldNormal);                       // N vector for illumination
+        NdotL = dot(N,L);                                      // part of diffuse term (multiplied by k_d's etc in the fragment shader)
+        gl_Position = ProjectionMatrix * WorldCoord;             // gl_Position is a predefined variable
+          // a correctly written vertex shader should write screen space coordinates to gl_Position
+          // they are used on the rasterization stage!
+      }
+    """
+    @compileShader (&)
+    unless @getShaderParameter (&), COMPILE_STATUS
+      throw new Error "couldn't compile vertex shader!"
+
+  fragment-shader = @createShader FRAGMENT_SHADER
+    @shaderSource (&), """
+      precision mediump float;
+
+      varying float NdotL;   // interpolated NdotL values (output of the vertex shader!)
+
+      uniform float LightIntensity;
+      uniform float AmbientIntensity;
+      uniform vec3 DiffuseAndAmbientCoefficient;     // for RGB: this is why it's a 3D vector
+
+      void main() {
+        gl_FragColor = vec4(
+          (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity) *
+          DiffuseAndAmbientCoefficient,
+          1);
+        // note that some simplifying assumptions are made in the above formula
+        //  for example, k_a=k_d is used; also, specular term is not used; also, no attenuation here
+      }
+    """
+    @compileShader(&)
+    unless @getShaderParameter (&), COMPILE_STATUS
+      throw new Error "couldn't compile fragment shader!"
+
+  window.program = @createProgram!
+    @attachShader (&), vertex-shader
+    @attachShader (&), fragment-shader
+    @linkProgram (&)
+    unless @getProgramParameter (&), LINK_STATUS
+      throw new Error "couldn't intialize shader program!"
+    @useProgram (&)
+
+  # bind lightsource information
+
+  @uniform1f do
+    @getUniformLocation program, \LightIntensity
+    0.9
+
+  @uniform1f do
+    @getUniformLocation program, \AmbientIntensity
+    0.2
+
+  @uniform3f do
+    @getUniformLocation program, \DiffuseAndAmbientCoefficient
+    1 1 1
+    # 0.7 0.7 0.7
+
+  @uniform3fv do
+    @getUniformLocation program, \L
+    flat-light-direction
+
+gouraud-program = !-> with gl
   vertex-shader = @createShader VERTEX_SHADER
     @shaderSource (&), """
       attribute vec3 coord;
@@ -155,13 +238,13 @@ with gl
 
   @uniform3fv do
     @getUniformLocation program, \LightLocation
-    [-1 -1 0]
+    [-1 -1 -10]
 
 var triangles, vertices
 var vertices-buffer, normals-buffer, triangles-buffer
 var staging
 var distance, rotation, current-rot
-var gouraud, flat-norms, flat-verts, flat-indices
+var gouraud, flat-norms, flat-verts
 
 calculate-normals-and-flats = !->
   gouraud := new Float32Array vertices.length
@@ -169,8 +252,7 @@ calculate-normals-and-flats = !->
   # for flat
   flat-norms := new Float32Array triangles.length * 3
   flat-verts := new Float32Array triangles.length * 3
-  flat-indices := new Uint16Array triangles.length
-  j = k = 0 # counter
+  j = 0
 
   for i from 0 til triangles.length by 3
     a = triangles[i    ] * 3
@@ -185,45 +267,24 @@ calculate-normals-and-flats = !->
       vec3.direction v0, v2, []
       []
 
-    gouraud[a    ] += cross[0]
-    gouraud[a + 1] += cross[1]
-    gouraud[a + 2] += cross[2]
+    gouraud[a, a + 1, a + 2] += cross
+    gouraud[b, b + 1, b + 2] += cross
+    gouraud[c, c + 2, c + 2] += cross
 
-    gouraud[b    ] += cross[0]
-    gouraud[b + 1] += cross[1]
-    gouraud[b + 2] += cross[2]
+    #cross = [0, 0, 1]
+    flat-verts[j    , j + 1, j + 2] = v0
+    flat-verts[j + 3, j + 4, j + 5] = v1
+    flat-verts[j + 6, j + 7, j + 8] = v2
 
-    gouraud[c    ] += cross[0]
-    gouraud[c + 1] += cross[1]
-    gouraud[c + 2] += cross[2]
+    flat-norms[j    , j + 1, j + 2] = cross
+    flat-norms[j + 3, j + 4, j + 5] = cross
+    flat-norms[j + 6, j + 7, j + 8] = cross
+    j += 9
 
-    flat-indices[j    ] = j++
-    flat-indices[j    ] = j++
-    flat-indices[j    ] = j++
-
-    flat-verts[k    ] = v0.0
-    flat-verts[k + 1] = v0.1
-    flat-verts[k + 2] = v0.2
-    flat-norms[k    ] = cross[0]
-    flat-norms[k + 1] = cross[1]
-    flat-norms[k + 2] = cross[2]
-    k += 3
-
-    flat-verts[k    ] = v1.0
-    flat-verts[k + 1] = v1.1
-    flat-verts[k + 2] = v1.2
-    flat-norms[k    ] = cross[0]
-    flat-norms[k + 1] = cross[1]
-    flat-norms[k + 2] = cross[2]
-    k += 3
-
-    flat-verts[k    ] = v2.0
-    flat-verts[k + 1] = v2.1
-    flat-verts[k + 2] = v2.2
-    flat-norms[k    ] = cross[0]
-    flat-norms[k + 1] = cross[1]
-    flat-norms[k + 2] = cross[2]
-    k += 3
+  console.log flat-norms
+  console.log flat-verts
+  console.log j
+  console.log triangles.length * 3
 
   # find coordinate bounds
   minx = miny = minz = Infinity
@@ -240,8 +301,8 @@ calculate-normals-and-flats = !->
       minz <?= &
       maxz >?= &
 
-  log "min: #minx #miny #minz"
-  log "max: #maxx #maxy #maxz"
+  #log "min: #minx #miny #minz"
+  #log "max: #maxx #maxy #maxz"
 
   # transforms to center stage
   to-center = -[(minx + maxx) / 2, (miny + maxy) / 2, (minz + maxz) / 2]
@@ -256,7 +317,7 @@ calculate-normals-and-flats = !->
 
 # draw the model from the input file of triangles and vertices
 setup-buffers = !->
-
+  console.log shading
   # vertices
   vertices-buffer := gl.createBuffer!
     gl.bindBuffer ARRAY_BUFFER, (&)
@@ -272,24 +333,20 @@ setup-buffers = !->
 
   # normals
   normals-buffer := gl.createBuffer!
-    gl.bindBuffer ELEMENT_ARRAY_BUFFER, (&)
+    gl.bindBuffer ARRAY_BUFFER, (&)
     gl.bufferData do
-      ELEMENT_ARRAY_BUFFER
+      ARRAY_BUFFER
       if shading is \flat then flat-norms else gouraud
       STATIC_DRAW
 
-    # bind to varying normal
+    # bind to unvarying normal
     gl.getAttribLocation program, \normal
       gl.enableVertexAttribArray (&)
       gl.vertexAttribPointer (&), 3, FLOAT, false 0 0
 
-  console.log triangles
   triangles-buffer := gl.createBuffer!
     gl.bindBuffer ELEMENT_ARRAY_BUFFER, (&)
-    gl.bufferData do
-      ELEMENT_ARRAY_BUFFER
-      if shading is \flat then flat-indices else triangles
-      STATIC_DRAW
+    gl.bufferData ELEMENT_ARRAY_BUFFER, triangles, STATIC_DRAW
 
 reset-stage = !->
   rotation := mat4.identity!
@@ -323,8 +380,12 @@ export draw = !->
     false
     model-view
 
-  gl.bindBuffer ELEMENT_ARRAY_BUFFER, triangles-buffer
-  gl.drawElements TRIANGLES, triangles.length, UNSIGNED_SHORT, 0
+  if shading is \gouraud
+    gl.bindBuffer ELEMENT_ARRAY_BUFFER, triangles-buffer
+    gl.drawElements TRIANGLES, triangles.length, UNSIGNED_SHORT, 0
+  else # flat
+    gl.bindBuffer ARRAY_BUFFER, vertices-buffer
+    gl.drawArrays TRIANGLES, 0, triangles.length
 
 # read the input file
 parse = !->
@@ -338,6 +399,10 @@ parse = !->
         triangles := new Uint16Array tokens.splice 0 num-triangles * 3
         vertices := new Float32Array tokens.splice 0 num-vertices * 3
 
+        if shading is \flat
+          do flat-program
+        else
+          do gouraud-program
         do calculate-normals-and-flats
         do setup-buffers
         do reset-stage
@@ -365,6 +430,7 @@ point-under = (x,y) ->
 # mouse rotation
 canvas
   &addEventListener \mousedown !({clientX: i0, clientY: j0}) ->
+    return unless current-rot?
     &style.cursor = \move
 
     p = point-under i0, j0
