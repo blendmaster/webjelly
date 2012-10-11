@@ -2,7 +2,7 @@
 original commented source there. */
 (function(){
   "use strict";
-  var canvas, width, height, k, ref$, v, x$, fov, calculateNormals, makeFlats, triangles, vertices, verticesBuffer, normalsBuffer, trianglesBuffer, staging, distance, rotation, currentRot, setupBuffers, draw, parse, pointUnder, out$ = typeof exports != 'undefined' && exports || this;
+  var canvas, width, height, k, ref$, v, shading, x$, fov, triangles, vertices, verticesBuffer, normalsBuffer, trianglesBuffer, staging, distance, rotation, currentRot, gouraud, flatNorms, flatVerts, flatIndices, calculateNormalsAndFlats, setupBuffers, resetStage, draw, parse, pointUnder, out$ = typeof exports != 'undefined' && exports || this;
   canvas = document.getElementById('canvas');
   width = canvas.width, height = canvas.height;
   try {
@@ -18,6 +18,24 @@ original commented source there. */
       window[k] = v;
     }
   }
+  x$ = $('flat');
+  if (x$.checked) {
+    shading = 'flat';
+  }
+  x$.addEventListener('click', function(){
+    shading = 'flat';
+    setupBuffers();
+    draw();
+  });
+  x$ = $('gouraud');
+  if (x$.checked) {
+    shading = 'gouraud';
+  }
+  x$.addEventListener('click', function(){
+    shading = 'gouraud';
+    setupBuffers();
+    draw();
+  });
   x$ = $('front');
   if (x$.checked) {
     gl.cullFace(FRONT);
@@ -75,10 +93,14 @@ original commented source there. */
     this.uniform3f(this.getUniformLocation(program, 'DiffuseAndAmbientCoefficient'), 1, 1, 1);
     this.uniform3fv(this.getUniformLocation(program, 'LightLocation'), [-1, -1, 0]);
   }.call(gl));
-  calculateNormals = function(){
-    var gouraud, i, to$, a, b, c, v0, v1, v2, cross;
+  calculateNormalsAndFlats = function(){
+    var k, j, i, to$, a, b, c, v0, v1, v2, cross, minz, miny, minx, maxz, maxy, maxx, x$, toCenter, _, toStage;
     gouraud = new Float32Array(vertices.length);
-    for (i = 0, to$ = triangles.length - 3; i <= to$; i += 3) {
+    flatNorms = new Float32Array(triangles.length * 3);
+    flatVerts = new Float32Array(triangles.length * 3);
+    flatIndices = new Uint16Array(triangles.length);
+    j = k = 0;
+    for (i = 0, to$ = triangles.length; i < to$; i += 3) {
       a = triangles[i] * 3;
       b = triangles[i + 1] * 3;
       c = triangles[i + 2] * 3;
@@ -95,17 +117,34 @@ original commented source there. */
       gouraud[c] += cross[0];
       gouraud[c + 1] += cross[1];
       gouraud[c + 2] += cross[2];
+      flatIndices[j] = j++;
+      flatIndices[j] = j++;
+      flatIndices[j] = j++;
+      flatVerts[k] = v0[0];
+      flatVerts[k + 1] = v0[1];
+      flatVerts[k + 2] = v0[2];
+      flatNorms[k] = cross[0];
+      flatNorms[k + 1] = cross[1];
+      flatNorms[k + 2] = cross[2];
+      k += 3;
+      flatVerts[k] = v1[0];
+      flatVerts[k + 1] = v1[1];
+      flatVerts[k + 2] = v1[2];
+      flatNorms[k] = cross[0];
+      flatNorms[k + 1] = cross[1];
+      flatNorms[k + 2] = cross[2];
+      k += 3;
+      flatVerts[k] = v2[0];
+      flatVerts[k + 1] = v2[1];
+      flatVerts[k + 2] = v2[2];
+      flatNorms[k] = cross[0];
+      flatNorms[k + 1] = cross[1];
+      flatNorms[k + 2] = cross[2];
+      k += 3;
     }
-    return gouraud;
-  };
-  makeFlats = function(){};
-  setupBuffers = function(){
-    var gouraud, minz, miny, minx, maxz, maxy, maxx, i, to$, x$, toCenter, _, toStage, y$;
-    gouraud = calculateNormals();
-    log("normals: " + gouraud);
     minx = miny = minz = Infinity;
     maxx = maxy = maxz = 0;
-    for (i = 0, to$ = vertices.length - 3; i <= to$; i += 3) {
+    for (i = 0, to$ = vertices.length; i < to$; i += 3) {
       x$ = vertices[i];
       minx <= x$ || (minx = x$);
       maxx >= x$ || (maxx = x$);
@@ -123,22 +162,27 @@ original commented source there. */
     staging = mat4.identity();
     mat4.scale(staging, toStage);
     mat4.translate(staging, toCenter);
+  };
+  setupBuffers = function(){
+    var x$, y$;
     x$ = verticesBuffer = gl.createBuffer();
     gl.bindBuffer(ARRAY_BUFFER, x$);
-    gl.bufferData(ARRAY_BUFFER, vertices, STATIC_DRAW);
+    gl.bufferData(ARRAY_BUFFER, shading === 'flat' ? flatVerts : vertices, STATIC_DRAW);
     y$ = gl.getAttribLocation(program, 'coord');
     gl.enableVertexAttribArray(y$);
     gl.vertexAttribPointer(y$, 3, FLOAT, false, 0, 0);
     x$ = normalsBuffer = gl.createBuffer();
     gl.bindBuffer(ELEMENT_ARRAY_BUFFER, x$);
-    gl.bufferData(ELEMENT_ARRAY_BUFFER, gouraud, STATIC_DRAW);
+    gl.bufferData(ELEMENT_ARRAY_BUFFER, shading === 'flat' ? flatNorms : gouraud, STATIC_DRAW);
     y$ = gl.getAttribLocation(program, 'normal');
     gl.enableVertexAttribArray(y$);
     gl.vertexAttribPointer(y$, 3, FLOAT, false, 0, 0);
     console.log(triangles);
     x$ = trianglesBuffer = gl.createBuffer();
     gl.bindBuffer(ELEMENT_ARRAY_BUFFER, x$);
-    gl.bufferData(ELEMENT_ARRAY_BUFFER, triangles, STATIC_DRAW);
+    gl.bufferData(ELEMENT_ARRAY_BUFFER, shading === 'flat' ? flatIndices : triangles, STATIC_DRAW);
+  };
+  resetStage = function(){
     rotation = mat4.identity();
     currentRot = mat4.identity();
     fov = 15;
@@ -169,7 +213,9 @@ original commented source there. */
         ref$ = tokens.splice(0, 2), numTriangles = ref$[0], numVertices = ref$[1];
         triangles = new Uint16Array(tokens.splice(0, numTriangles * 3));
         vertices = new Float32Array(tokens.splice(0, numVertices * 3));
+        calculateNormalsAndFlats();
         setupBuffers();
+        resetStage();
         draw();
       };
     }
