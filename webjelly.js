@@ -2,7 +2,7 @@
 original commented source there. */
 (function(){
   "use strict";
-  var canvas, width, height, k, ref$, v, shading, x$, fov, flatLightDirection, flatProgram, gouraudProgram, triangles, vertices, verticesBuffer, normalsBuffer, trianglesBuffer, staging, distance, rotation, currentRot, gouraud, flatNorms, flatVerts, calculateNormalsAndFlats, setupBuffers, resetStage, draw, parse, pointUnder, out$ = typeof exports != 'undefined' && exports || this;
+  var canvas, width, height, k, ref$, v, shading, x$, fov, flatLightDirection, flatProgram, gouraudProgram, triangles, vertices, verticesBuffer, normalsBuffer, trianglesBuffer, staging, distance, rotation, currentRot, gouraud, coords, flat, calculateNormalsAndFlats, setupBuffers, resetStage, draw, parse, pointUnder, out$ = typeof exports != 'undefined' && exports || this;
   canvas = document.getElementById('canvas');
   width = canvas.width, height = canvas.height;
   try {
@@ -102,16 +102,16 @@ original commented source there. */
     (function(){
       var x$, vertexShader, fragmentShader;
       x$ = vertexShader = this.createShader(VERTEX_SHADER);
-      this.shaderSource(x$, "attribute vec3 coord;\nattribute vec3 normal;\n\nvarying float NdotL;\n\nuniform mat4 ModelViewMatrix;\nuniform mat4 ProjectionMatrix;\nuniform mat3 NormalMatrix;\nuniform vec3 LightLocation;\n\nvoid main() {\n  vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);   // convert to world coordinates\n  vec3 L = normalize(LightLocation - WorldCoord.xyz);    // L vector for illumination\n  vec3 WorldNormal = NormalMatrix * normal;                // normal in world coordinates\n  vec3 N = normalize(WorldNormal);                       // N vector for illumination\n  NdotL = dot(N,L);                                      // part of diffuse term (multiplied by k_d's etc in the fragment shader)\n  gl_Position = ProjectionMatrix * WorldCoord;             // gl_Position is a predefined variable\n    // a correctly written vertex shader should write screen space coordinates to gl_Position\n    // they are used on the rasterization stage!\n}");
+      this.shaderSource(x$, "precision mediump float;\n\nattribute vec3 coord;\nattribute vec3 normal;\n\nvarying vec3 aColor;\n\nuniform mat4 ModelViewMatrix;\nuniform mat4 ProjectionMatrix;\nuniform mat3 NormalMatrix;\nuniform vec3 LightLocation;\n\nuniform float LightIntensity;\nuniform float AmbientIntensity;\nuniform vec3 DiffuseAndAmbientCoefficient;\n\nvoid main() {\n  vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);\n  vec3 L = normalize(LightLocation - WorldCoord.xyz);\n  vec3 WorldNormal = NormalMatrix * normal;\n  vec3 N = normalize(WorldNormal);\n  float NdotL = dot(N,L);\n  aColor =\n    ((LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity) *\n    DiffuseAndAmbientCoefficient);\n\n  gl_Position = ProjectionMatrix * WorldCoord;\n}");
       this.compileShader(x$);
       if (!this.getShaderParameter(x$, COMPILE_STATUS)) {
-        throw new Error("couldn't compile vertex shader!");
+        throw new Error("couldn't compile vertex shader!\n" + this.getShaderInfoLog(x$));
       }
       x$ = fragmentShader = this.createShader(FRAGMENT_SHADER);
-      this.shaderSource(x$, "precision mediump float;\n\nvarying float NdotL;   // interpolated NdotL values (output of the vertex shader!)\n// note that interpolation qualifiers have to match between vertex and fragment shader\n\nuniform float LightIntensity;\nuniform float AmbientIntensity;\nuniform vec3 DiffuseAndAmbientCoefficient;     // for RGB: this is why it's a 3D vector\n\nvoid main() {\n  gl_FragColor = vec4(\n    (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity) *\n    DiffuseAndAmbientCoefficient,\n    1);\n  // note that some simplifying assumptions are made in the above formula\n  //  for example, k_a=k_d is used; also, specular term is not used; also, no attenuation here\n}");
+      this.shaderSource(x$, "precision mediump float;\n\nvarying vec3 aColor;\n\nvoid main() {\n  gl_FragColor = vec4(aColor, 1.0);\n  //  (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity) *\n   // DiffuseAndAmbientCoefficient,\n   // 1);\n}");
       this.compileShader(x$);
       if (!this.getShaderParameter(x$, COMPILE_STATUS)) {
-        throw new Error("couldn't compile fragment shader!");
+        throw new Error("couldn't compile fragment shader!\n" + this.getShaderInfoLog(x$));
       }
       x$ = window.program = this.createProgram();
       this.attachShader(x$, vertexShader);
@@ -128,34 +128,42 @@ original commented source there. */
     }.call(gl));
   };
   calculateNormalsAndFlats = function(){
-    var j, i, to$, a, b, c, v0, v1, v2, cross, minz, miny, minx, maxz, maxy, maxx, x$, toCenter, _, toStage;
-    gouraud = new Float32Array(vertices.length);
-    flatNorms = new Float32Array(triangles.length * 3);
-    flatVerts = new Float32Array(triangles.length * 3);
+    var slice, vertNorms, j, i, to$, a, b, c, v0, v1, v2, cross, ref$, minz, miny, minx, maxz, maxy, maxx, x$, toCenter, _, toStage;
+    slice = Array.prototype.slice;
+    vertNorms = new Float32Array(vertices.length);
+    coords = new Float32Array(triangles.length * 3);
+    flat = new Float32Array(triangles.length * 3);
     j = 0;
     for (i = 0, to$ = triangles.length; i < to$; i += 3) {
       a = triangles[i] * 3;
       b = triangles[i + 1] * 3;
       c = triangles[i + 2] * 3;
-      v0 = Array.prototype.slice.call(vertices, a, 3 + a);
-      v1 = Array.prototype.slice.call(vertices, b, 3 + b);
-      v2 = Array.prototype.slice.call(vertices, c, 3 + c);
+      v0 = slice.call(vertices, a, 3 + a);
+      v1 = slice.call(vertices, b, 3 + b);
+      v2 = slice.call(vertices, c, 3 + c);
       cross = vec3.cross(vec3.direction(v0, v1, []), vec3.direction(v0, v2, []), []);
-      gouraud[a] += cross[0], gouraud[a + 1] += cross[1], gouraud[a + 2] += cross[2];
-      gouraud[b] += cross[0], gouraud[b + 1] += cross[1], gouraud[b + 2] += cross[2];
-      gouraud[c] += cross[0], gouraud[c + 2] += cross[1], gouraud[c + 2] += cross[2];
-      flatVerts[j] = v0[0], flatVerts[j + 1] = v0[1], flatVerts[j + 2] = v0[2];
-      flatVerts[j + 3] = v1[0], flatVerts[j + 4] = v1[1], flatVerts[j + 5] = v1[2];
-      flatVerts[j + 6] = v2[0], flatVerts[j + 7] = v2[1], flatVerts[j + 8] = v2[2];
-      flatNorms[j] = cross[0], flatNorms[j + 1] = cross[1], flatNorms[j + 2] = cross[2];
-      flatNorms[j + 3] = cross[0], flatNorms[j + 4] = cross[1], flatNorms[j + 5] = cross[2];
-      flatNorms[j + 6] = cross[0], flatNorms[j + 7] = cross[1], flatNorms[j + 8] = cross[2];
+      vertNorms[a] += cross[0], vertNorms[a + 1] += cross[1], vertNorms[a + 2] += cross[2];
+      vertNorms[b] += cross[0], vertNorms[b + 1] += cross[1], vertNorms[b + 2] += cross[2];
+      vertNorms[c] += cross[0], vertNorms[c + 1] += cross[1], vertNorms[c + 2] += cross[2];
+      coords[j] = v0[0], coords[j + 1] = v0[1], coords[j + 2] = v0[2];
+      coords[j + 3] = v1[0], coords[j + 4] = v1[1], coords[j + 5] = v1[2];
+      coords[j + 6] = v2[0], coords[j + 7] = v2[1], coords[j + 8] = v2[2];
+      flat[j] = cross[0], flat[j + 1] = cross[1], flat[j + 2] = cross[2];
+      flat[j + 3] = cross[0], flat[j + 4] = cross[1], flat[j + 5] = cross[2];
+      flat[j + 6] = cross[0], flat[j + 7] = cross[1], flat[j + 8] = cross[2];
       j += 9;
     }
-    console.log(flatNorms);
-    console.log(flatVerts);
-    console.log(j);
-    console.log(triangles.length * 3);
+    j = 0;
+    gouraud = new Float32Array(triangles.length * 3);
+    for (i = 0, to$ = triangles.length; i < to$; i += 3) {
+      a = triangles[i] * 3;
+      b = triangles[i + 1] * 3;
+      c = triangles[i + 2] * 3;
+      ref$ = slice.call(vertNorms, a, 3 + a), gouraud[j] = ref$[0], gouraud[j + 1] = ref$[1], gouraud[j + 2] = ref$[2];
+      ref$ = slice.call(vertNorms, b, 3 + b), gouraud[j + 3] = ref$[0], gouraud[j + 4] = ref$[1], gouraud[j + 5] = ref$[2];
+      ref$ = slice.call(vertNorms, c, 3 + c), gouraud[j + 6] = ref$[0], gouraud[j + 7] = ref$[1], gouraud[j + 8] = ref$[2];
+      j += 9;
+    }
     minx = miny = minz = Infinity;
     maxx = maxy = maxz = 0;
     for (i = 0, to$ = vertices.length; i < to$; i += 3) {
@@ -177,22 +185,18 @@ original commented source there. */
   };
   setupBuffers = function(){
     var x$, y$;
-    console.log(shading);
     x$ = verticesBuffer = gl.createBuffer();
     gl.bindBuffer(ARRAY_BUFFER, x$);
-    gl.bufferData(ARRAY_BUFFER, shading === 'flat' ? flatVerts : vertices, STATIC_DRAW);
+    gl.bufferData(ARRAY_BUFFER, coords, STATIC_DRAW);
     y$ = gl.getAttribLocation(program, 'coord');
     gl.enableVertexAttribArray(y$);
     gl.vertexAttribPointer(y$, 3, FLOAT, false, 0, 0);
     x$ = normalsBuffer = gl.createBuffer();
     gl.bindBuffer(ARRAY_BUFFER, x$);
-    gl.bufferData(ARRAY_BUFFER, shading === 'flat' ? flatNorms : gouraud, STATIC_DRAW);
+    gl.bufferData(ARRAY_BUFFER, shading === 'flat' ? flat : gouraud, STATIC_DRAW);
     y$ = gl.getAttribLocation(program, 'normal');
     gl.enableVertexAttribArray(y$);
     gl.vertexAttribPointer(y$, 3, FLOAT, false, 0, 0);
-    x$ = trianglesBuffer = gl.createBuffer();
-    gl.bindBuffer(ELEMENT_ARRAY_BUFFER, x$);
-    gl.bufferData(ELEMENT_ARRAY_BUFFER, triangles, STATIC_DRAW);
   };
   resetStage = function(){
     rotation = mat4.identity();
@@ -211,13 +215,8 @@ original commented source there. */
     mat4.multiply(modelView, rot);
     mat4.multiply(modelView, staging);
     gl.uniformMatrix4fv(gl.getUniformLocation(program, 'ModelViewMatrix'), false, modelView);
-    if (shading === 'gouraud') {
-      gl.bindBuffer(ELEMENT_ARRAY_BUFFER, trianglesBuffer);
-      gl.drawElements(TRIANGLES, triangles.length, UNSIGNED_SHORT, 0);
-    } else {
-      gl.bindBuffer(ARRAY_BUFFER, verticesBuffer);
-      gl.drawArrays(TRIANGLES, 0, triangles.length);
-    }
+    gl.bindBuffer(ARRAY_BUFFER, verticesBuffer);
+    gl.drawArrays(TRIANGLES, 0, triangles.length);
   };
   parse = function(){
     var that, x$;

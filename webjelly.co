@@ -164,54 +164,55 @@ flat-program = !-> with gl
 gouraud-program = !-> with gl
   vertex-shader = @createShader VERTEX_SHADER
     @shaderSource (&), """
+      precision mediump float;
+
       attribute vec3 coord;
       attribute vec3 normal;
 
-      varying float NdotL;
+      varying vec3 aColor;
 
       uniform mat4 ModelViewMatrix;
       uniform mat4 ProjectionMatrix;
       uniform mat3 NormalMatrix;
       uniform vec3 LightLocation;
 
+      uniform float LightIntensity;
+      uniform float AmbientIntensity;
+      uniform vec3 DiffuseAndAmbientCoefficient;
+
       void main() {
-        vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);   // convert to world coordinates
-        vec3 L = normalize(LightLocation - WorldCoord.xyz);    // L vector for illumination
-        vec3 WorldNormal = NormalMatrix * normal;                // normal in world coordinates
-        vec3 N = normalize(WorldNormal);                       // N vector for illumination
-        NdotL = dot(N,L);                                      // part of diffuse term (multiplied by k_d's etc in the fragment shader)
-        gl_Position = ProjectionMatrix * WorldCoord;             // gl_Position is a predefined variable
-          // a correctly written vertex shader should write screen space coordinates to gl_Position
-          // they are used on the rasterization stage!
+        vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);
+        vec3 L = normalize(LightLocation - WorldCoord.xyz);
+        vec3 WorldNormal = NormalMatrix * normal;
+        vec3 N = normalize(WorldNormal);
+        float NdotL = dot(N,L);
+        aColor =
+          ((LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity) *
+          DiffuseAndAmbientCoefficient);
+
+        gl_Position = ProjectionMatrix * WorldCoord;
       }
     """
     @compileShader (&)
     unless @getShaderParameter (&), COMPILE_STATUS
-      throw new Error "couldn't compile vertex shader!"
+      throw new Error "couldn't compile vertex shader!\n#{@getShaderInfoLog(&)}"
 
   fragment-shader = @createShader FRAGMENT_SHADER
     @shaderSource (&), """
       precision mediump float;
 
-      varying float NdotL;   // interpolated NdotL values (output of the vertex shader!)
-      // note that interpolation qualifiers have to match between vertex and fragment shader
-
-      uniform float LightIntensity;
-      uniform float AmbientIntensity;
-      uniform vec3 DiffuseAndAmbientCoefficient;     // for RGB: this is why it's a 3D vector
+      varying vec3 aColor;
 
       void main() {
-        gl_FragColor = vec4(
-          (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity) *
-          DiffuseAndAmbientCoefficient,
-          1);
-        // note that some simplifying assumptions are made in the above formula
-        //  for example, k_a=k_d is used; also, specular term is not used; also, no attenuation here
+        gl_FragColor = vec4(aColor, 1.0);
+        //  (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity) *
+         // DiffuseAndAmbientCoefficient,
+         // 1);
       }
     """
     @compileShader(&)
     unless @getShaderParameter (&), COMPILE_STATUS
-      throw new Error "couldn't compile fragment shader!"
+      throw new Error "couldn't compile fragment shader!\n#{@getShaderInfoLog(&)}"
 
   window.program = @createProgram!
     @attachShader (&), vertex-shader
@@ -244,52 +245,63 @@ var triangles, vertices
 var vertices-buffer, normals-buffer, triangles-buffer
 var staging
 var distance, rotation, current-rot
-var gouraud, flat-norms, flat-verts
+var gouraud, coords, flat
 
 calculate-normals-and-flats = !->
-  gouraud := new Float32Array vertices.length
+  slice = Array::slice
 
-  # for flat
-  flat-norms := new Float32Array triangles.length * 3
-  flat-verts := new Float32Array triangles.length * 3
+  vert-norms = new Float32Array vertices.length
+
+  # coord, with no duplicates
+  coords := new Float32Array triangles.length * 3
+
+  flat := new Float32Array triangles.length * 3
   j = 0
 
   for i from 0 til triangles.length by 3
     a = triangles[i    ] * 3
     b = triangles[i + 1] * 3
     c = triangles[i + 2] * 3
-    v0 = Array::slice.call vertices, a, 3 + a
-    v1 = Array::slice.call vertices, b, 3 + b
-    v2 = Array::slice.call vertices, c, 3 + c
+    v0 = slice.call vertices, a, 3 + a
+    v1 = slice.call vertices, b, 3 + b
+    v2 = slice.call vertices, c, 3 + c
 
     cross = vec3.cross do
       vec3.direction v0, v1, []
       vec3.direction v0, v2, []
       []
 
-    gouraud[a, a + 1, a + 2] += cross
-    gouraud[b, b + 1, b + 2] += cross
-    gouraud[c, c + 2, c + 2] += cross
+    vert-norms[a, a + 1, a + 2] += cross
+    vert-norms[b, b + 1, b + 2] += cross
+    vert-norms[c, c + 1, c + 2] += cross
 
-    #cross = [0, 0, 1]
-    flat-verts[j    , j + 1, j + 2] = v0
-    flat-verts[j + 3, j + 4, j + 5] = v1
-    flat-verts[j + 6, j + 7, j + 8] = v2
+    coords[j    , j + 1, j + 2] = v0
+    coords[j + 3, j + 4, j + 5] = v1
+    coords[j + 6, j + 7, j + 8] = v2
 
-    flat-norms[j    , j + 1, j + 2] = cross
-    flat-norms[j + 3, j + 4, j + 5] = cross
-    flat-norms[j + 6, j + 7, j + 8] = cross
+    flat[j    , j + 1, j + 2] = cross
+    flat[j + 3, j + 4, j + 5] = cross
+    flat[j + 6, j + 7, j + 8] = cross
     j += 9
 
-  console.log flat-norms
-  console.log flat-verts
-  console.log j
-  console.log triangles.length * 3
+  # fill gouraud normals in coords order
+  j = 0
+  gouraud := new Float32Array triangles.length * 3
+
+
+  for i from 0 til triangles.length by 3
+    a = triangles[i    ] * 3
+    b = triangles[i + 1] * 3
+    c = triangles[i + 2] * 3
+
+    gouraud[j    , j + 1, j + 2] = slice.call vert-norms, a, 3 + a
+    gouraud[j + 3, j + 4, j + 5] = slice.call vert-norms, b, 3 + b
+    gouraud[j + 6, j + 7, j + 8] = slice.call vert-norms, c, 3 + c
+    j += 9
 
   # find coordinate bounds
   minx = miny = minz = Infinity
   maxx = maxy = maxz = 0
-
   for i from 0 til vertices.length by 3
     vertices[i]
       minx <?= &
@@ -317,13 +329,12 @@ calculate-normals-and-flats = !->
 
 # draw the model from the input file of triangles and vertices
 setup-buffers = !->
-  console.log shading
   # vertices
   vertices-buffer := gl.createBuffer!
     gl.bindBuffer ARRAY_BUFFER, (&)
     gl.bufferData do
       ARRAY_BUFFER
-      if shading is \flat then flat-verts else vertices
+      coords
       STATIC_DRAW
 
     # bind to varying coordiantes
@@ -336,7 +347,7 @@ setup-buffers = !->
     gl.bindBuffer ARRAY_BUFFER, (&)
     gl.bufferData do
       ARRAY_BUFFER
-      if shading is \flat then flat-norms else gouraud
+      if shading is \flat then flat else gouraud
       STATIC_DRAW
 
     # bind to unvarying normal
@@ -344,9 +355,9 @@ setup-buffers = !->
       gl.enableVertexAttribArray (&)
       gl.vertexAttribPointer (&), 3, FLOAT, false 0 0
 
-  triangles-buffer := gl.createBuffer!
-    gl.bindBuffer ELEMENT_ARRAY_BUFFER, (&)
-    gl.bufferData ELEMENT_ARRAY_BUFFER, triangles, STATIC_DRAW
+  #triangles-buffer := gl.createBuffer!
+    #gl.bindBuffer ELEMENT_ARRAY_BUFFER, (&)
+    #gl.bufferData ELEMENT_ARRAY_BUFFER, triangles, STATIC_DRAW
 
 reset-stage = !->
   rotation := mat4.identity!
@@ -380,12 +391,12 @@ export draw = !->
     false
     model-view
 
-  if shading is \gouraud
-    gl.bindBuffer ELEMENT_ARRAY_BUFFER, triangles-buffer
-    gl.drawElements TRIANGLES, triangles.length, UNSIGNED_SHORT, 0
-  else # flat
-    gl.bindBuffer ARRAY_BUFFER, vertices-buffer
-    gl.drawArrays TRIANGLES, 0, triangles.length
+  #if shading is \gouraud
+    #gl.bindBuffer ELEMENT_ARRAY_BUFFER, triangles-buffer
+    #gl.drawElements TRIANGLES, triangles.length, UNSIGNED_SHORT, 0
+  #else # flat
+  gl.bindBuffer ARRAY_BUFFER, vertices-buffer
+  gl.drawArrays TRIANGLES, 0, triangles.length
 
 # read the input file
 parse = !->
