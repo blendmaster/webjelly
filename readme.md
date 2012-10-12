@@ -10,11 +10,10 @@ Graphics** class at the Colorado School of Mines.
 # Viewing Models
 
 `webjelly` runs in any modern web browser with WebGL support. It was tested on
-Firefox 16 and Chrome 22, but Firefox >=4, Chrome >18 or so, and even Opera
->=12 will work. No Internet Explorer. If you don't have a very good graphics
+Firefox 16 and Chrome 22, but Firefox >=4, Chrome >18 or so, and even Opera >=12
+will work. No Internet Explorer. If you don't have a very good graphics
 card or you're not running regular drivers, WebGL may be disabled even though
-the browser supports it. Try googling around to figure out how to force enable
-it.
+the browser supports it. Try googling around to figure out how to force enable it.
 
 Open `index.html` in your chosen browser, or browse to the [hosted version][]
 and open a file in the format:
