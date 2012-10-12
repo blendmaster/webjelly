@@ -279,7 +279,6 @@ original commented source there. */
     x$.addEventListener('mousemove', rotate);
     stop = (function(ran){
       return function(){
-        var ran;
         if (!ran) {
           ran = true;
           mat4.multiply(currentRot, rotation, rotation);

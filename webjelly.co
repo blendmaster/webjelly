@@ -466,7 +466,7 @@ canvas
     stop = let ran = false
       !->
         if not ran
-          ran = true
+          ran := true
 
           mat4.multiply current-rot, rotation, rotation
           current-rot := mat4.identity!
