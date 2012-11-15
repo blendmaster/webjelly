@@ -14,14 +14,24 @@
 <p>Select an input file:
   <input type=file id=file>
 
+<div>Texture:
+  <ul>
+    <li><label><input type=radio id=none name=texture checked>None</label>
+        (Shading:
+        <label><input id=flat type=radio name=shading>Flat</label>
+        <label><input id=gouraud type=radio name=shading checked>Gouraud</label>)
+    <li><label><input type=radio id=environment name=texture>Environment Map</label>
+        <label>(File: <input type=file id=env-texture>)</label>
+    <li><label><input type=radio id=threedee name=texture>3D</label>
+        <label>(File: <input type=file id=threedee-texture>)</label>
+    <li><label><input id=donut type=radio name=texture checked>Tiled Donut</label>
+        <label>(File: <input type=file id=donut-texture>)</label>
+  </ul>
+</div>
 <div>
   <button id=zoom-in type=button>Zoom in</button>
   <button id=zoom-out type=button>Zoom out</button>
-  <span>Shading:
-    <label><input id=flat type=radio name=shading>Flat</label>
-    <label><input id=gouraud type=radio name=shading checked>Gouraud</label>
-  </span>
-  <span>, Triangle Orientation:
+  <span>Triangle Orientation:
     <label><input id=front type=radio name=orientation checked>Front</label>
     <label><input id=back type=radio name=orientation>Back</label>
   </span>
@@ -42,3 +52,4 @@
 <script src=gl-matrix-min.js></script>
 <script src=utils.js></script>
 <script src=webjelly.js></script>
+
