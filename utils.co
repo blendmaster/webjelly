@@ -18,3 +18,54 @@ export degrees = -> it * 180 / Math.PI
 export radians = -> it * Math.PI / 180
 
 export $ = -> document.getElementById it
+
+# flattens the 3d texture to a big 2d texture, since webGL doesn't support 3d
+# textures natively
+export flatten3d = (gl, pixels, width, height, depth) ->
+  if width * height * depth > 2048*2048
+    throw new Error "That 3d texture is too big ;_;"
+  data = new Uint8Array pixels
+  tex = gl.createTexture!
+  gl.bindTexture gl.TEXTURE_2D, tex
+  gl.texImage2D gl.TEXTURE_2D, 0, gl.RGB, 1, 1, 0, gl.RGB, gl.UNSIGNED_BYTE, data
+  gl.texParameteri 
+
+# the texture from a ppm image file
+export read-ppm = (gl, it) ->
+  [p3, width, height, ...pixels] = it.split /\s+/
+  data = new Uint8Array pixels
+  tex = gl.createTexture!
+  gl.bindTexture gl.TEXTURE_2D, tex
+
+# how many vertices to generate with the donut around the circles
+const
+  RES    = 12vertices
+  CIRCLE = Math.PI * 2
+  RADS   = CIRCLE / RES
+
+# generates a torus model
+# returns [triangles, vertices]
+export make-donut = (inner-radius, outer-radius) ->
+  triangles = new Uint16Array RES * RES # XXX
+  vertices = new Float32Array RES * RES * 3
+  i = 0
+  for phi til CIRCLE by RADS
+    for theta til CIRCLE by RADS
+      vertices[i++] = 
+      vertices[i++] = 
+      vertices[i++] = 
+
+  for i til RES * RES
+    triangles[i] =
+
+
+
+  return
+    triangles
+    vertices
+
+# convert a sphere map to a cube map, which webGL can handle natively
+# returns the cube map
+export sphere-to-cube = (gl, sphere) ->
+  return stuff
+
