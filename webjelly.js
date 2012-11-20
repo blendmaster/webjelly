@@ -2,14 +2,14 @@
 original commented source there. */
 (function(){
   "use strict";
-  var canvas, width, height, k, ref$, v, shading, x$, fov, flatLightDirection, flatProgram, gouraudProgram, torusTexture, torusProgram, triangles, vertices, verticesBuffer, normalsBuffer, trianglesBuffer, staging, distance, rotation, currentRot, gouraud, coords, flat, calculateNormalsAndFlats, setupBuffers, resetStage, draw, parse, pointUnder, out$ = typeof exports != 'undefined' && exports || this;
+  var canvas, width, height, k, ref$, v, shading, x$, fov, flatLightDirection, flatProgram, gouraudProgram, donutTexture, donutProgram, triangles, vertices, verticesBuffer, normalsBuffer, trianglesBuffer, staging, distance, rotation, currentRot, gouraud, coords, flat, calculateNormalsAndFlats, currentProgram, thetas, phis, thetaBuffer, phiBuffer, setupBuffers, resetStage, draw, pointUnder, out$ = typeof exports != 'undefined' && exports || this;
   canvas = document.getElementById('canvas');
   width = canvas.width, height = canvas.height;
   try {
     window.gl = WebGLDebugUtils.makeDebugContext(canvas.getContext('webgl') || canvas.getContext('experimental-webgl'));
   } catch (e$) {}
   if (typeof gl == 'undefined' || gl === null) {
-    alert("Sorry, it looks like your browser doesn't support WebGL, or webGL isdisabled!");
+    alert("Sorry, it looks like your browser doesn't support WebGL, or webGL is disabled!");
     throw new Error("no webgl ;_;");
   }
   for (k in ref$ = gl) {
@@ -91,15 +91,23 @@ original commented source there. */
       gl.uniform3fv(gl.getUniformLocation(program, 'LightLocation'), [-1, -1, -10]);
     }
   });
-  torusProgram = shaderProgram(gl, {
+  read('donut-texture', 'AsBinaryString', function(it){
+    donutTexture = readPpm(gl, it);
+    setupBuffers();
+    resetStage();
+    draw();
+  });
+  donutProgram = shaderProgram(gl, {
     vertex: "#define TWOPI " + 2 * Math.PI + "\nprecision mediump float;\n\nattribute float theta;\nattribute float phi;\n\nvarying vec2 tex;\nvarying float intensity;\n\nuniform mat4 ModelViewMatrix;\nuniform mat4 ProjectionMatrix;\nuniform mat3 NormalMatrix;\nuniform vec3 LightLocation;\n\nuniform float LightIntensity;\nuniform float AmbientIntensity;\nuniform vec3 DiffuseAndAmbientCoefficient;\n\nvoid main() {\n  vec3 coord = vec3( (0.5 + 0.5 * cos(phi)) * cos(theta)\n                   , (0.5 + 0.5 * cos(phi)) * sin(theta)\n                   , 0.5 * sin(phi)\n                   );\n  vec3 normal = vec3( cos(phi) * cos(theta)\n                    , cos(phi) * sin(theta)\n                    , sin(phi)\n                    );\n  tex = vec2(theta/TWOPI,phi/TWOPI);\n\n  vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);\n  vec3 L = normalize(LightLocation - WorldCoord.xyz);\n  vec3 WorldNormal = NormalMatrix * normal;\n  vec3 N = normalize(WorldNormal);\n  float NdotL = dot(N,L);\n  intensity =\n    (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity);\n\n  gl_Position = ProjectionMatrix * WorldCoord;\n}",
     fragment: "precision mediump float;\n\nuniform sampler2D texture;\n\nvarying vec2 tex; // coords\nvarying float intensity;\n\nvoid main() {\n  gl_FragColor = vec4(intensity * texture2D(texture, tex).xyz, 1.0);\n}",
     init: function(gl, program){
+      window.program = program;
       gl.uniform1f(gl.getUniformLocation(program, 'LightIntensity'), 0.9);
       gl.uniform1f(gl.getUniformLocation(program, 'AmbientIntensity'), 0.2);
       gl.uniform3fv(gl.getUniformLocation(program, 'LightLocation'), [-1, -1, -10]);
     }
   });
+  staging = mat4.identity();
   calculateNormalsAndFlats = function(){
     var slice, vertNorms, j, i, to$, a, b, c, v0, v1, v2, cross, ref$, minz, miny, minx, maxz, maxy, maxx, x$, toCenter, _, toStage;
     slice = Array.prototype.slice;
@@ -156,20 +164,43 @@ original commented source there. */
     mat4.scale(staging, toStage);
     mat4.translate(staging, toCenter);
   };
+  currentProgram = 'donut';
+  ref$ = makeDonut(), thetas = ref$[0], phis = ref$[1];
   setupBuffers = function(){
     var x$, y$;
-    x$ = verticesBuffer = gl.createBuffer();
-    gl.bindBuffer(ARRAY_BUFFER, x$);
-    gl.bufferData(ARRAY_BUFFER, coords, STATIC_DRAW);
-    y$ = gl.getAttribLocation(program, 'coord');
-    gl.enableVertexAttribArray(y$);
-    gl.vertexAttribPointer(y$, 3, FLOAT, false, 0, 0);
-    x$ = normalsBuffer = gl.createBuffer();
-    gl.bindBuffer(ARRAY_BUFFER, x$);
-    gl.bufferData(ARRAY_BUFFER, shading === 'flat' ? flat : gouraud, STATIC_DRAW);
-    y$ = gl.getAttribLocation(program, 'normal');
-    gl.enableVertexAttribArray(y$);
-    gl.vertexAttribPointer(y$, 3, FLOAT, false, 0, 0);
+    if (currentProgram === 'donut') {
+      donutProgram();
+      if (donutTexture != null) {
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, donutTexture);
+        gl.uniform1i(gl.getUniformLocation(program, 'texture'), 0);
+      }
+      x$ = thetaBuffer = gl.createBuffer();
+      gl.bindBuffer(ARRAY_BUFFER, x$);
+      gl.bufferData(ARRAY_BUFFER, thetas, STATIC_DRAW);
+      y$ = gl.getAttribLocation(program, 'theta');
+      gl.enableVertexAttribArray(y$);
+      gl.vertexAttribPointer(y$, 1, FLOAT, false, 0, 0);
+      x$ = phiBuffer = gl.createBuffer();
+      gl.bindBuffer(ARRAY_BUFFER, x$);
+      gl.bufferData(ARRAY_BUFFER, phis, STATIC_DRAW);
+      y$ = gl.getAttribLocation(program, 'phi');
+      gl.enableVertexAttribArray(y$);
+      gl.vertexAttribPointer(y$, 1, FLOAT, false, 0, 0);
+    } else {
+      x$ = verticesBuffer = gl.createBuffer();
+      gl.bindBuffer(ARRAY_BUFFER, x$);
+      gl.bufferData(ARRAY_BUFFER, coords, STATIC_DRAW);
+      y$ = gl.getAttribLocation(program, 'coord');
+      gl.enableVertexAttribArray(y$);
+      gl.vertexAttribPointer(y$, 3, FLOAT, false, 0, 0);
+      x$ = normalsBuffer = gl.createBuffer();
+      gl.bindBuffer(ARRAY_BUFFER, x$);
+      gl.bufferData(ARRAY_BUFFER, shading === 'flat' ? flat : gouraud, STATIC_DRAW);
+      y$ = gl.getAttribLocation(program, 'normal');
+      gl.enableVertexAttribArray(y$);
+      gl.vertexAttribPointer(y$, 3, FLOAT, false, 0, 0);
+    }
   };
   resetStage = function(){
     rotation = mat4.identity();
@@ -188,35 +219,30 @@ original commented source there. */
     mat4.multiply(modelView, rot);
     mat4.multiply(modelView, staging);
     gl.uniformMatrix4fv(gl.getUniformLocation(program, 'ModelViewMatrix'), false, modelView);
-    gl.bindBuffer(ARRAY_BUFFER, verticesBuffer);
-    gl.drawArrays(TRIANGLES, 0, triangles.length);
-  };
-  parse = function(){
-    var that, x$;
-    if (that = this.files[0]) {
-      x$ = new FileReader;
-      x$.readAsText(that);
-      x$.onload = function(){
-        var tokens, ref$, numTriangles, numVertices;
-        tokens = this.result.split(/\s+/).map(parseFloat);
-        ref$ = tokens.splice(0, 2), numTriangles = ref$[0], numVertices = ref$[1];
-        triangles = new Uint16Array(tokens.splice(0, numTriangles * 3));
-        vertices = new Float32Array(tokens.splice(0, numVertices * 3));
-        if (shading === 'flat') {
-          flatProgram();
-        } else {
-          gouraudProgram();
-        }
-        calculateNormalsAndFlats();
-        setupBuffers();
-        resetStage();
-        draw();
-      };
+    if (currentProgram === 'donut') {
+      gl.bindBuffer(ARRAY_BUFFER, thetaBuffer);
+      gl.drawArrays(TRIANGLES, 0, thetas.length / 3);
+    } else {
+      gl.bindBuffer(ARRAY_BUFFER, verticesBuffer);
+      gl.drawArrays(TRIANGLES, 0, triangles.length);
     }
   };
-  x$ = $('file');
-  x$.addEventListener('change', parse);
-  parse.call(x$);
+  read('file', 'AsText', function(it){
+    var tokens, ref$, numTriangles, numVertices;
+    tokens = it.split(/\s+/).map(parseFloat);
+    ref$ = tokens.splice(0, 2), numTriangles = ref$[0], numVertices = ref$[1];
+    triangles = new Uint16Array(tokens.splice(0, numTriangles * 3));
+    vertices = new Float32Array(tokens.splice(0, numVertices * 3));
+    if (shading === 'flat') {
+      flatProgram();
+    } else {
+      gouraudProgram();
+    }
+    calculateNormalsAndFlats();
+    setupBuffers();
+    resetStage();
+    draw();
+  });
   pointUnder = function(x, y){
     var ref$, left, top, det;
     ref$ = canvas.getBoundingClientRect(), left = ref$.left, top = ref$.top;

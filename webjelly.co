@@ -16,7 +16,7 @@ try
     canvas.getContext \webgl or canvas.getContext \experimental-webgl
 
 if gl!?
-  alert "Sorry, it looks like your browser doesn't support WebGL, or webGL is
+  alert "Sorry, it looks like your browser doesn't support WebGL, or webGL is \
     disabled!"
   throw new Error "no webgl ;_;"
 
@@ -207,8 +207,15 @@ gouraud-program = shader-program gl,
       gl.getUniformLocation program, \LightLocation
       [-1 -1 -10]
 
-var torus-texture
-torus-program = shader-program gl,
+var donut-texture
+read \donut-texture, \AsBinaryString !->
+  donut-texture := read-ppm gl, it
+
+  do setup-buffers
+  do reset-stage
+  do draw
+
+donut-program = shader-program gl,
   vertex: """
     \#define TWOPI #{2 * Math.PI}
     precision mediump float;
@@ -263,6 +270,7 @@ torus-program = shader-program gl,
       }
   """
   init: !(gl, program) ->
+    window.program = program
     gl.uniform1f do
       gl.getUniformLocation program, \LightIntensity
       0.9
@@ -275,11 +283,9 @@ torus-program = shader-program gl,
       gl.getUniformLocation program, \LightLocation
       [-1 -1 -10]
 
-
-
 var triangles, vertices
 var vertices-buffer, normals-buffer, triangles-buffer
-var staging
+staging = mat4.identity!
 var distance, rotation, current-rot
 var gouraud, coords, flat
 
@@ -363,37 +369,75 @@ calculate-normals-and-flats = !->
   mat4.scale staging, to-stage
   mat4.translate staging, to-center
 
+current-program = \donut
+[thetas, phis] = do make-donut
+var theta-buffer, phi-buffer
+
 # draw the model from the input file of triangles and vertices
 setup-buffers = !->
-  # vertices
-  vertices-buffer := gl.createBuffer!
-    gl.bindBuffer ARRAY_BUFFER, (&)
-    gl.bufferData do
-      ARRAY_BUFFER
-      coords
-      STATIC_DRAW
+  if current-program is \donut
+    do donut-program
 
-    # bind to varying coordiantes
-    gl.getAttribLocation program, \coord
-      gl.enableVertexAttribArray (&)
-      gl.vertexAttribPointer (&), 3, FLOAT, false 0 0
+    if donut-texture?
+      gl.activeTexture gl.TEXTURE0
+      gl.bindTexture gl.TEXTURE_2D, donut-texture
+      gl.uniform1i do
+        gl.getUniformLocation program, \texture
+        0 # texture 0
 
-  # normals
-  normals-buffer := gl.createBuffer!
-    gl.bindBuffer ARRAY_BUFFER, (&)
-    gl.bufferData do
-      ARRAY_BUFFER
-      if shading is \flat then flat else gouraud
-      STATIC_DRAW
+    theta-buffer := gl.createBuffer!
+      gl.bindBuffer ARRAY_BUFFER, (&)
+      gl.bufferData do
+        ARRAY_BUFFER
+        thetas
+        STATIC_DRAW
 
-    # bind to unvarying normal
-    gl.getAttribLocation program, \normal
-      gl.enableVertexAttribArray (&)
-      gl.vertexAttribPointer (&), 3, FLOAT, false 0 0
+      # bind to varying coordiantes
+      gl.getAttribLocation program, \theta
+        gl.enableVertexAttribArray (&)
+        gl.vertexAttribPointer (&), 1, FLOAT, false 0 0
 
-  #triangles-buffer := gl.createBuffer!
-    #gl.bindBuffer ELEMENT_ARRAY_BUFFER, (&)
-    #gl.bufferData ELEMENT_ARRAY_BUFFER, triangles, STATIC_DRAW
+    phi-buffer := gl.createBuffer!
+      gl.bindBuffer ARRAY_BUFFER, (&)
+      gl.bufferData do
+        ARRAY_BUFFER
+        phis
+        STATIC_DRAW
+
+      # bind to varying coordiantes
+      gl.getAttribLocation program, \phi
+        gl.enableVertexAttribArray (&)
+        gl.vertexAttribPointer (&), 1, FLOAT, false 0 0
+  else
+    # vertices
+    vertices-buffer := gl.createBuffer!
+      gl.bindBuffer ARRAY_BUFFER, (&)
+      gl.bufferData do
+        ARRAY_BUFFER
+        coords
+        STATIC_DRAW
+
+      # bind to varying coordiantes
+      gl.getAttribLocation program, \coord
+        gl.enableVertexAttribArray (&)
+        gl.vertexAttribPointer (&), 3, FLOAT, false 0 0
+
+    # normals
+    normals-buffer := gl.createBuffer!
+      gl.bindBuffer ARRAY_BUFFER, (&)
+      gl.bufferData do
+        ARRAY_BUFFER
+        if shading is \flat then flat else gouraud
+        STATIC_DRAW
+
+      # bind to unvarying normal
+      gl.getAttribLocation program, \normal
+        gl.enableVertexAttribArray (&)
+        gl.vertexAttribPointer (&), 3, FLOAT, false 0 0
+
+    #triangles-buffer := gl.createBuffer!
+      #gl.bindBuffer ELEMENT_ARRAY_BUFFER, (&)
+      #gl.bufferData ELEMENT_ARRAY_BUFFER, triangles, STATIC_DRAW
 
 reset-stage = !->
   rotation := mat4.identity!
@@ -431,34 +475,28 @@ export draw = !->
     #gl.bindBuffer ELEMENT_ARRAY_BUFFER, triangles-buffer
     #gl.drawElements TRIANGLES, triangles.length, UNSIGNED_SHORT, 0
   #else # flat
-  gl.bindBuffer ARRAY_BUFFER, vertices-buffer
-  gl.drawArrays TRIANGLES, 0, triangles.length
+  if current-program is \donut
+    gl.bindBuffer ARRAY_BUFFER, theta-buffer
+    gl.drawArrays TRIANGLES, 0, thetas.length / 3
+  else
+    gl.bindBuffer ARRAY_BUFFER, vertices-buffer
+    gl.drawArrays TRIANGLES, 0, triangles.length
 
-# read the input file
-parse = !->
-  if @files.0
-    new FileReader
-      &readAsText that
-      &onload = !->
-        tokens = @result.split /\s+/ .map parseFloat
-        [num-triangles, num-vertices] = tokens.splice 0, 2
+read \file, \AsText !->
+  tokens = it.split /\s+/ .map parseFloat
+  [num-triangles, num-vertices] = tokens.splice 0, 2
 
-        triangles := new Uint16Array tokens.splice 0 num-triangles * 3
-        vertices := new Float32Array tokens.splice 0 num-vertices * 3
+  triangles := new Uint16Array tokens.splice 0 num-triangles * 3
+  vertices := new Float32Array tokens.splice 0 num-vertices * 3
 
-        if shading is \flat
-          do flat-program
-        else
-          do gouraud-program
-        do calculate-normals-and-flats
-        do setup-buffers
-        do reset-stage
-        do draw
-
-$ \file
-  &addEventListener \change parse
-  # on refresh, if some file is still selected, do parse
-  parse.call (&)
+  if shading is \flat
+    do flat-program
+  else
+    do gouraud-program
+  do calculate-normals-and-flats
+  do setup-buffers
+  do reset-stage
+  do draw
 
 point-under = (x,y) ->
   {left, top} = canvas.getBoundingClientRect!

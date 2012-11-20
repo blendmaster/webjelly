@@ -2,7 +2,7 @@
 original commented source there. */
 (function(){
   "use strict";
-  var log, degrees, radians, $, flatten3d, readPpm, RES, CIRCLE, RADS, makeDonut, sphereToCube, shaderProgram, out$ = typeof exports != 'undefined' && exports || this, slice$ = [].slice;
+  var log, degrees, radians, $, flatten3d, readPpm, RES, CIRCLE, RADS, makeDonut, sphereToCube, shaderProgram, defer, read, out$ = typeof exports != 'undefined' && exports || this;
   mat4.translation = function(translation){
     return mat4.translate(mat4.identity(), translation);
   };
@@ -31,11 +31,20 @@ original commented source there. */
     return gl.texParameteri;
   };
   out$.readPpm = readPpm = function(gl, it){
-    var ref$, p3, width, height, pixels, data, tex;
-    ref$ = it.split(/\s+/), p3 = ref$[0], width = ref$[1], height = ref$[2], pixels = slice$.call(ref$, 3);
-    data = new Uint8Array(pixels);
+    var ref$, width, height, pixels, data, i, to$, tex;
+    ref$ = it.match(/P6\n(\d+) (\d+)\n255\n([\s\S]+)/), width = ref$[1], height = ref$[2], pixels = ref$[3];
+    width = parseInt(width, 10);
+    height = parseInt(height, 10);
+    data = new Uint8Array(width * height * 3);
+    for (i = 0, to$ = pixels.length; i < to$; ++i) {
+      data[i] = pixels.charCodeAt(i);
+    }
     tex = gl.createTexture();
-    return gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, width, height, 0, gl.RGB, gl.UNSIGNED_BYTE, data);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    return tex;
   };
   RES = 12;
   CIRCLE = Math.PI * 2;
@@ -44,7 +53,7 @@ original commented source there. */
     return (n % b + b) % b;
   }
   out$.makeDonut = makeDonut = function(){
-    var thetas, phis, i, j, theta, step$, to$, phi, step1$, to1$, results$ = [];
+    var thetas, phis, i, j, theta, step$, to$, phi, step1$, to1$;
     thetas = new Float32Array(RES * RES * 2 * 3);
     phis = new Float32Array(RES * RES * 2 * 3);
     i = 0;
@@ -59,13 +68,13 @@ original commented source there. */
         phis[j++] = phi;
         thetas[i++] = theta;
         phis[j++] = mod(phi + RADS, CIRCLE);
-        thetas[i++] = mod(theta - RADS, CIRLCE);
+        thetas[i++] = mod(theta - RADS, CIRCLE);
         phis[j++] = phi;
         thetas[i++] = theta;
-        results$.push(phis[j++] = mod(phi + 2 * RADS, CIRCLE));
+        phis[j++] = mod(phi + 2 * RADS, CIRCLE);
       }
     }
-    return results$;
+    return [thetas, phis];
   };
   out$.sphereToCube = sphereToCube = function(gl, sphere){
     return stuff;
@@ -96,5 +105,24 @@ original commented source there. */
       gl.useProgram(program);
       init(gl, program);
     };
+  };
+  defer = function(t, fn){
+    return setTimeout(fn, t);
+  };
+  out$.read = read = function(id, readerFn, fn){
+    var onchange, x$;
+    onchange = function(){
+      var that, x$;
+      if (that = this.files[0]) {
+        x$ = new FileReader;
+        x$.onload = function(){
+          fn(this.result);
+        };
+        x$["read" + readerFn](that);
+      }
+    };
+    return (x$ = $(id), x$.addEventListener('change', onchange), defer(10, function(){
+      onchange.call(x$);
+    }));
   };
 }).call(this);
