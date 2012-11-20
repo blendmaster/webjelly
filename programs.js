@@ -36,4 +36,13 @@ original commented source there. */
       LightLocation: ['3f', -10, -10, 10]
     }
   });
+  programs.environment = shaderProgram({
+    vertex: "precision mediump float;\n\nattribute vec3 coord;\nattribute vec3 normal;\n\nvarying vec2 tex;\nvarying float intensity;\n\nuniform mat4 ModelViewMatrix;\nuniform mat4 ProjectionMatrix;\nuniform mat3 NormalMatrix;\nuniform vec3 LightLocation;\n\nuniform float LightIntensity;\nuniform float AmbientIntensity;\nuniform vec3 DiffuseAndAmbientCoefficient;\n\nvoid main() {\n  vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);\n  vec3 L = normalize(LightLocation - WorldCoord.xyz);\n  vec3 WorldNormal = NormalMatrix * normal;\n  vec3 N = normalize(WorldNormal);\n  float NdotL = dot(N,L);\n  intensity =\n    (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity);\n\n  //tex = N to polar;\n\n  gl_Position = ProjectionMatrix * WorldCoord;\n}",
+    fragment: "precision mediump float;\n\nuniform sample2D texture;\n\nvarying vec2 tex; // coords\nvarying float intensity;\n\nvoid main() {\n  gl_FragColor = vec4(intensity * texture2D(texture, tex).xyz, 1.0);\n}",
+    uniforms: {
+      LightIntensity: ['1f', 0.8],
+      AmbientIntensity: ['1f', 0.2],
+      LightLocation: ['3f', -10, -10, 10]
+    }
+  });
 }).call(this);
