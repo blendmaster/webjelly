@@ -43,11 +43,14 @@ const
   CIRCLE = Math.PI * 2
   RADS   = CIRCLE / RES
 
+function mod n, b => ((n % b) + b) % b
+
 # generates a torus model
-# returns an array of [[theta, phi]] pairs, in TRIANGLE order, but flattened
+# returns [thetas, phis] in Triangles order
 export make-donut = ->
-  params = new Float32Array RES * RES * 2 * 3
-  i = 0
+  thetas = new Float32Array RES * RES * 2 * 3
+  phis   = new Float32Array RES * RES * 2 * 3
+  i = 0; j = 0
   # for every point, add the two triangles in order
   for theta til CIRCLE by RADS
     for phi til CIRCLE by RADS
@@ -58,13 +61,13 @@ export make-donut = ->
       #        |\
       #        | \
       #     .  6--5
-      params[i++] = theta; params[i++] = phi
-      params[i++] = theta; params[i++] = phi + RADS
-      params[i++] = theta + RADS; params[i++] = phi
+      thetas[i++] = theta                    ; phis[j++] = phi
+      thetas[i++] = theta                    ; phis[j++] = mod phi + RADS, CIRCLE
+      thetas[i++] = mod theta + RADS, CIRCLE ; phis[j++] = phi
 
-      params[i++] = theta; params[i++] = phi + RADS
-      params[i++] = theta - RADS; params[i++] = phi
-      params[i++] = theta; params[i++] = phi + RADS + RADS
+      thetas[i++] = theta                    ; phis[j++] = mod phi + RADS, CIRCLE
+      thetas[i++] = mod theta - RADS, CIRLCE ; phis[j++] = phi
+      thetas[i++] = theta                    ; phis[j++] = mod phi + 2 * RADS, CIRCLE
 
 # convert a sphere map to a cube map, which webGL can handle natively
 # returns the cube map
@@ -78,13 +81,13 @@ export shader-program = (gl, {vertex, fragment, init}) ->
     gl.shaderSource (&), vertex
     gl.compileShader (&)
     unless gl.getShaderParameter (&), COMPILE_STATUS
-      throw new Error "couldn't compile vertex shader!\n#{@getShaderInfoLog(&)}"
+      throw new Error "couldn't compile vertex shader!\n#{gl.getShaderInfoLog(&)}"
 
   fragment-shader = gl.createShader gl.FRAGMENT_SHADER
     gl.shaderSource (&), fragment
     gl.compileShader (&)
     unless gl.getShaderParameter (&), COMPILE_STATUS
-      throw new Error "couldn't compile fragment shader!\n#{@getShaderInfoLog(&)}"
+      throw new Error "couldn't compile fragment shader!\n#{gl.getShaderInfoLog(&)}"
 
   program = gl.createProgram!
     gl.attachShader (&), vertex-shader
