@@ -236,13 +236,13 @@ donut-program = shader-program gl,
     uniform vec3 DiffuseAndAmbientCoefficient;
 
     void main() {
-      vec3 coord = vec3( (0.5 + 0.5 * cos(phi)) * cos(theta)
-                       , (0.5 + 0.5 * cos(phi)) * sin(theta)
-                       , 0.5 * sin(phi)
+      vec3 coord = vec3( (0.75 + 0.25 * cos(phi)) * cos(theta)
+                       , (0.75 + 0.25 * cos(phi)) * sin(theta)
+                       , 0.25 * sin(phi)
                        );
-      vec3 normal = vec3( cos(phi) * cos(theta)
-                        , cos(phi) * sin(theta)
-                        , sin(phi)
+      vec3 normal = vec3( -cos(phi) * cos(theta)
+                        , -cos(phi) * sin(theta)
+                        , -sin(phi)
                         );
       tex = vec2(theta/TWOPI,phi/TWOPI);
 
@@ -277,7 +277,7 @@ donut-program = shader-program gl,
 
     gl.uniform1f do
       gl.getUniformLocation program, \AmbientIntensity
-      0.2
+      0.1
 
     gl.uniform3fv do
       gl.getUniformLocation program, \LightLocation
@@ -477,7 +477,7 @@ export draw = !->
   #else # flat
   if current-program is \donut
     gl.bindBuffer ARRAY_BUFFER, theta-buffer
-    gl.drawArrays TRIANGLES, 0, thetas.length / 3
+    gl.drawArrays TRIANGLES, 0, thetas.length
   else
     gl.bindBuffer ARRAY_BUFFER, vertices-buffer
     gl.drawArrays TRIANGLES, 0, triangles.length

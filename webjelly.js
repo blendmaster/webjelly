@@ -98,12 +98,12 @@ original commented source there. */
     draw();
   });
   donutProgram = shaderProgram(gl, {
-    vertex: "#define TWOPI " + 2 * Math.PI + "\nprecision mediump float;\n\nattribute float theta;\nattribute float phi;\n\nvarying vec2 tex;\nvarying float intensity;\n\nuniform mat4 ModelViewMatrix;\nuniform mat4 ProjectionMatrix;\nuniform mat3 NormalMatrix;\nuniform vec3 LightLocation;\n\nuniform float LightIntensity;\nuniform float AmbientIntensity;\nuniform vec3 DiffuseAndAmbientCoefficient;\n\nvoid main() {\n  vec3 coord = vec3( (0.5 + 0.5 * cos(phi)) * cos(theta)\n                   , (0.5 + 0.5 * cos(phi)) * sin(theta)\n                   , 0.5 * sin(phi)\n                   );\n  vec3 normal = vec3( cos(phi) * cos(theta)\n                    , cos(phi) * sin(theta)\n                    , sin(phi)\n                    );\n  tex = vec2(theta/TWOPI,phi/TWOPI);\n\n  vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);\n  vec3 L = normalize(LightLocation - WorldCoord.xyz);\n  vec3 WorldNormal = NormalMatrix * normal;\n  vec3 N = normalize(WorldNormal);\n  float NdotL = dot(N,L);\n  intensity =\n    (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity);\n\n  gl_Position = ProjectionMatrix * WorldCoord;\n}",
+    vertex: "#define TWOPI " + 2 * Math.PI + "\nprecision mediump float;\n\nattribute float theta;\nattribute float phi;\n\nvarying vec2 tex;\nvarying float intensity;\n\nuniform mat4 ModelViewMatrix;\nuniform mat4 ProjectionMatrix;\nuniform mat3 NormalMatrix;\nuniform vec3 LightLocation;\n\nuniform float LightIntensity;\nuniform float AmbientIntensity;\nuniform vec3 DiffuseAndAmbientCoefficient;\n\nvoid main() {\n  vec3 coord = vec3( (0.75 + 0.25 * cos(phi)) * cos(theta)\n                   , (0.75 + 0.25 * cos(phi)) * sin(theta)\n                   , 0.25 * sin(phi)\n                   );\n  vec3 normal = vec3( -cos(phi) * cos(theta)\n                    , -cos(phi) * sin(theta)\n                    , -sin(phi)\n                    );\n  tex = vec2(theta/TWOPI,phi/TWOPI);\n\n  vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);\n  vec3 L = normalize(LightLocation - WorldCoord.xyz);\n  vec3 WorldNormal = NormalMatrix * normal;\n  vec3 N = normalize(WorldNormal);\n  float NdotL = dot(N,L);\n  intensity =\n    (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity);\n\n  gl_Position = ProjectionMatrix * WorldCoord;\n}",
     fragment: "precision mediump float;\n\nuniform sampler2D texture;\n\nvarying vec2 tex; // coords\nvarying float intensity;\n\nvoid main() {\n  gl_FragColor = vec4(intensity * texture2D(texture, tex).xyz, 1.0);\n}",
     init: function(gl, program){
       window.program = program;
       gl.uniform1f(gl.getUniformLocation(program, 'LightIntensity'), 0.9);
-      gl.uniform1f(gl.getUniformLocation(program, 'AmbientIntensity'), 0.2);
+      gl.uniform1f(gl.getUniformLocation(program, 'AmbientIntensity'), 0.1);
       gl.uniform3fv(gl.getUniformLocation(program, 'LightLocation'), [-1, -1, -10]);
     }
   });
@@ -221,7 +221,7 @@ original commented source there. */
     gl.uniformMatrix4fv(gl.getUniformLocation(program, 'ModelViewMatrix'), false, modelView);
     if (currentProgram === 'donut') {
       gl.bindBuffer(ARRAY_BUFFER, thetaBuffer);
-      gl.drawArrays(TRIANGLES, 0, thetas.length / 3);
+      gl.drawArrays(TRIANGLES, 0, thetas.length);
     } else {
       gl.bindBuffer(ARRAY_BUFFER, verticesBuffer);
       gl.drawArrays(TRIANGLES, 0, triangles.length);

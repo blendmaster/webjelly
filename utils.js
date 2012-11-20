@@ -46,7 +46,7 @@ original commented source there. */
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     return tex;
   };
-  RES = 12;
+  RES = 40;
   CIRCLE = Math.PI * 2;
   RADS = CIRCLE / RES;
   function mod(n, b){
@@ -69,7 +69,7 @@ original commented source there. */
         thetas[i++] = theta;
         phis[j++] = mod(phi + RADS, CIRCLE);
         thetas[i++] = mod(theta - RADS, CIRCLE);
-        phis[j++] = phi;
+        phis[j++] = mod(phi + 2 * RADS, CIRCLE);
         thetas[i++] = theta;
         phis[j++] = mod(phi + 2 * RADS, CIRCLE);
       }

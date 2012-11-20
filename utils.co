@@ -48,7 +48,7 @@ export read-ppm = (gl, it) ->
 
 # how many vertices to generate with the donut around the circles
 const
-  RES    = 12vertices
+  RES    = 40vertices
   CIRCLE = Math.PI * 2
   RADS   = CIRCLE / RES
 
@@ -61,6 +61,7 @@ export make-donut = ->
   phis   = new Float32Array RES * RES * 2 * 3
   i = 0; j = 0
   # for every point, add the two triangles in order
+  # XXX something's wrong here
   for theta til CIRCLE by RADS
     for phi til CIRCLE by RADS
       #     3--1  .
@@ -75,7 +76,7 @@ export make-donut = ->
       thetas[i++] = mod theta + RADS, CIRCLE ; phis[j++] = phi
 
       thetas[i++] = theta                    ; phis[j++] = mod phi + RADS, CIRCLE
-      thetas[i++] = mod theta - RADS, CIRCLE ; phis[j++] = phi
+      thetas[i++] = mod theta - RADS, CIRCLE ; phis[j++] = mod phi + 2 * RADS, CIRCLE
       thetas[i++] = theta                    ; phis[j++] = mod phi + 2 * RADS, CIRCLE
 
   return [thetas, phis]
