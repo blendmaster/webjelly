@@ -102,8 +102,8 @@ original commented source there. */
     fragment: "precision mediump float;\n\nuniform sampler2D texture;\n\nvarying vec2 tex; // coords\nvarying float intensity;\n\nvoid main() {\n  gl_FragColor = vec4(intensity * texture2D(texture, tex).xyz, 1.0);\n}",
     init: function(gl, program){
       window.program = program;
-      gl.uniform1f(gl.getUniformLocation(program, 'LightIntensity'), 0.9);
-      gl.uniform1f(gl.getUniformLocation(program, 'AmbientIntensity'), 0.1);
+      gl.uniform1f(gl.getUniformLocation(program, 'LightIntensity'), 0.5);
+      gl.uniform1f(gl.getUniformLocation(program, 'AmbientIntensity'), 0.5);
       gl.uniform3fv(gl.getUniformLocation(program, 'LightLocation'), [-1, -1, -10]);
     }
   });

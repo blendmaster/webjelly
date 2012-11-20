@@ -49,9 +49,6 @@ original commented source there. */
   RES = 40;
   CIRCLE = Math.PI * 2;
   RADS = CIRCLE / RES;
-  function mod(n, b){
-    return (n % b + b) % b;
-  }
   out$.makeDonut = makeDonut = function(){
     var thetas, phis, i, j, theta, step$, to$, phi, step1$, to1$;
     thetas = new Float32Array(RES * RES * 2 * 3);
@@ -63,15 +60,15 @@ original commented source there. */
         thetas[i++] = theta;
         phis[j++] = phi;
         thetas[i++] = theta;
-        phis[j++] = mod(phi + RADS, CIRCLE);
-        thetas[i++] = mod(theta + RADS, CIRCLE);
+        phis[j++] = phi + RADS;
+        thetas[i++] = theta + RADS;
         phis[j++] = phi;
         thetas[i++] = theta;
-        phis[j++] = mod(phi + RADS, CIRCLE);
-        thetas[i++] = mod(theta - RADS, CIRCLE);
-        phis[j++] = mod(phi + 2 * RADS, CIRCLE);
+        phis[j++] = phi;
+        thetas[i++] = theta - RADS;
+        phis[j++] = phi + RADS;
         thetas[i++] = theta;
-        phis[j++] = mod(phi + 2 * RADS, CIRCLE);
+        phis[j++] = phi + RADS;
       }
     }
     return [thetas, phis];

@@ -273,11 +273,11 @@ donut-program = shader-program gl,
     window.program = program
     gl.uniform1f do
       gl.getUniformLocation program, \LightIntensity
-      0.9
+      0.5
 
     gl.uniform1f do
       gl.getUniformLocation program, \AmbientIntensity
-      0.1
+      0.5
 
     gl.uniform3fv do
       gl.getUniformLocation program, \LightLocation

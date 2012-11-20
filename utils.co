@@ -52,8 +52,6 @@ const
   CIRCLE = Math.PI * 2
   RADS   = CIRCLE / RES
 
-function mod n, b => ((n % b) + b) % b
-
 # generates a torus model
 # returns [thetas, phis] in Triangles order
 export make-donut = ->
@@ -61,23 +59,19 @@ export make-donut = ->
   phis   = new Float32Array RES * RES * 2 * 3
   i = 0; j = 0
   # for every point, add the two triangles in order
-  # XXX something's wrong here
   for theta til CIRCLE by RADS
     for phi til CIRCLE by RADS
-      #     3--1  .
-      #      \ |
-      #       \|
-      #     . 2,4 .
-      #        |\
-      #        | \
-      #     .  6--5
-      thetas[i++] = theta                    ; phis[j++] = phi
-      thetas[i++] = theta                    ; phis[j++] = mod phi + RADS, CIRCLE
-      thetas[i++] = mod theta + RADS, CIRCLE ; phis[j++] = phi
+      #     3-1,4  .
+      #      \ |\
+      #       \| \
+      #     . 2,6-5
+      thetas[i++] = theta        ; phis[j++] = phi
+      thetas[i++] = theta        ; phis[j++] = phi + RADS
+      thetas[i++] = theta + RADS ; phis[j++] = phi
 
-      thetas[i++] = theta                    ; phis[j++] = mod phi + RADS, CIRCLE
-      thetas[i++] = mod theta - RADS, CIRCLE ; phis[j++] = mod phi + 2 * RADS, CIRCLE
-      thetas[i++] = theta                    ; phis[j++] = mod phi + 2 * RADS, CIRCLE
+      thetas[i++] = theta        ; phis[j++] = phi
+      thetas[i++] = theta - RADS ; phis[j++] = phi + RADS
+      thetas[i++] = theta        ; phis[j++] = phi + RADS
 
   return [thetas, phis]
 
