@@ -139,6 +139,11 @@ original commented source there. */
     } else {
       buffers.vertices = bindBuffer(gl, 'coord', model.coords, 3);
       buffers.normals = bindBuffer(gl, 'normal', model[mode === 'flat' ? 'flat' : 'gouraud'], 3);
+      if (mode === 'environment') {
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, textures.environment);
+        uniform(gl, 'texture', '1i', 0);
+      }
     }
   };
   out$.draw = draw = function(){
@@ -175,6 +180,14 @@ original commented source there. */
     $('donut').disabled = false;
     if (initialMode === 'donut') {
       $('donut').click();
+    }
+  });
+  reading('env-texture', 'AsBinaryString', function(it){
+    textures.environment = readPpm(gl, it);
+    resetStage();
+    $('environment').disabled = false;
+    if (initialMode === 'environment') {
+      $('environment').click();
     }
   });
   reading('file', 'AsText', function(it){

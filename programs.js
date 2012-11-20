@@ -37,12 +37,7 @@ original commented source there. */
     }
   });
   programs.environment = shaderProgram({
-    vertex: "precision mediump float;\n\nattribute vec3 coord;\nattribute vec3 normal;\n\nvarying vec2 tex;\nvarying float intensity;\n\nuniform mat4 ModelViewMatrix;\nuniform mat4 ProjectionMatrix;\nuniform mat3 NormalMatrix;\nuniform vec3 LightLocation;\n\nuniform float LightIntensity;\nuniform float AmbientIntensity;\nuniform vec3 DiffuseAndAmbientCoefficient;\n\nvoid main() {\n  vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);\n  vec3 L = normalize(LightLocation - WorldCoord.xyz);\n  vec3 WorldNormal = NormalMatrix * normal;\n  vec3 N = normalize(WorldNormal);\n  float NdotL = dot(N,L);\n  intensity =\n    (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity);\n\n  //tex = N to polar;\n\n  gl_Position = ProjectionMatrix * WorldCoord;\n}",
-    fragment: "precision mediump float;\n\nuniform sample2D texture;\n\nvarying vec2 tex; // coords\nvarying float intensity;\n\nvoid main() {\n  gl_FragColor = vec4(intensity * texture2D(texture, tex).xyz, 1.0);\n}",
-    uniforms: {
-      LightIntensity: ['1f', 0.8],
-      AmbientIntensity: ['1f', 0.2],
-      LightLocation: ['3f', -10, -10, 10]
-    }
+    vertex: "precision mediump float;\n\nattribute vec3 coord;\nattribute vec3 normal;\n\nvarying vec2 tex;\n//varying float intensity;\n\nuniform mat4 ModelViewMatrix;\nuniform mat4 ProjectionMatrix;\nuniform mat3 NormalMatrix;\nuniform vec3 LightLocation;\n\nuniform float LightIntensity;\nuniform float AmbientIntensity;\nuniform vec3 DiffuseAndAmbientCoefficient;\n\nvoid main() {\n  vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);\n  vec3 L = normalize(LightLocation - WorldCoord.xyz);\n  vec3 WorldNormal = NormalMatrix * normal;\n  vec3 N = normalize(WorldNormal);\n  //float NdotL = dot(N,L);\n  //intensity =\n  //  (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity);\n\n  tex = vec2( (1.0 + N.x) / 2.0\n            , (1.0 + N.y) / 2.0\n            );\n\n  gl_Position = ProjectionMatrix * WorldCoord;\n}",
+    fragment: "precision mediump float;\n\nuniform sampler2D texture;\n\nvarying vec2 tex; // coords\n//varying float intensity;\n\nvoid main() {\n  //gl_FragColor = vec4(intensity * texture2D(texture, tex).xyz, 1.0);\n  gl_FragColor = vec4(texture2D(texture, tex).xyz, 1.0);\n}"
   });
 }).call(this);

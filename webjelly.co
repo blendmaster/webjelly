@@ -179,6 +179,11 @@ setup-buffers = !->
         model[if mode is \flat then \flat else \gouraud]
         3
 
+    if mode is \environment
+      gl.activeTexture gl.TEXTURE0
+      gl.bindTexture gl.TEXTURE_2D, textures.environment
+      uniform gl, \texture \1i 0
+
 export draw = !->
   return unless is-ready!
 
@@ -216,6 +221,15 @@ reading \donut-texture \AsBinaryString !->
   $ \donut .disabled = false
   # switch mode
   if initial-mode is \donut then $ \donut .click!
+
+reading \env-texture \AsBinaryString !->
+  textures.environment = read-ppm gl, it
+
+  reset-stage!
+
+  $ \environment .disabled = false
+  # switch mode
+  if initial-mode is \environment then $ \environment .click!
 
 reading \file \AsText !->
   tokens = it.split /\s+/ .map parseFloat

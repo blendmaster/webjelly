@@ -171,7 +171,7 @@ programs.environment = shader-program do
     attribute vec3 normal;
 
     varying vec2 tex;
-    varying float intensity;
+    //varying float intensity;
 
     uniform mat4 ModelViewMatrix;
     uniform mat4 ProjectionMatrix;
@@ -187,26 +187,29 @@ programs.environment = shader-program do
       vec3 L = normalize(LightLocation - WorldCoord.xyz);
       vec3 WorldNormal = NormalMatrix * normal;
       vec3 N = normalize(WorldNormal);
-      float NdotL = dot(N,L);
-      intensity =
-        (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity);
+      //float NdotL = dot(N,L);
+      //intensity =
+      //  (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity);
 
-      //tex = N to polar;
+      tex = vec2( (1.0 + N.x) / 2.0
+                , (1.0 + N.y) / 2.0
+                );
 
       gl_Position = ProjectionMatrix * WorldCoord;
     }"""
   fragment: """
     precision mediump float;
 
-    uniform sample2D texture;
+    uniform sampler2D texture;
 
     varying vec2 tex; // coords
-    varying float intensity;
+    //varying float intensity;
 
     void main() {
-      gl_FragColor = vec4(intensity * texture2D(texture, tex).xyz, 1.0);
+      //gl_FragColor = vec4(intensity * texture2D(texture, tex).xyz, 1.0);
+      gl_FragColor = vec4(texture2D(texture, tex).xyz, 1.0);
     }"""
-  uniforms:
-    LightIntensity               : [\1f 0.8]
-    AmbientIntensity             : [\1f 0.2]
-    LightLocation                : [\3f -10 -10 10]
+  #uniforms:
+    #LightIntensity               : [\1f 0.8]
+    #AmbientIntensity             : [\1f 0.2]
+    #LightLocation                : [\3f -10 -10 10]
