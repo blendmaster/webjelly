@@ -1,0 +1,168 @@
+# Webjelly GLSL programs
+# Author: Steven Ruppert
+# For the Fall 2012 CSCI441 Graphics class at Colorado School of Mines
+
+# this comment appears in the compiled source:
+/* This file (programs.js) is compiled from programs.co. Please view the
+original commented source there. */
+
+"use strict"
+
+programs = {}
+
+export load = (it, gl) -> programs[it] gl
+
+programs.flat = shader-program do
+  vertex: """
+      attribute vec3 coord;
+      attribute vec3 normal;
+
+      varying float NdotL;
+
+      uniform mat4 ModelViewMatrix;
+      uniform mat4 ProjectionMatrix;
+      uniform mat3 NormalMatrix;
+      uniform vec3 L;
+
+      void main() {
+        vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);
+        vec3 WorldNormal = NormalMatrix * normal;
+        vec3 N = normalize(WorldNormal);
+        NdotL = dot(N,L);
+        gl_Position = ProjectionMatrix * WorldCoord;
+      }
+  """
+  fragment: """
+      precision mediump float;
+
+      varying float NdotL;
+
+      uniform float LightIntensity;
+      uniform float AmbientIntensity;
+      uniform vec3 DiffuseAndAmbientCoefficient;
+
+      void main() {
+        gl_FragColor = vec4(
+          (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity) *
+          DiffuseAndAmbientCoefficient,
+          1);
+      }
+    """
+  uniforms:
+    LightIntensity               : [\1f 0.9]
+    AmbientIntensity             : [\1f 0.2]
+    DiffuseAndAmbientCoefficient : [\3f 1 1 1]
+
+    # OpenGL ES 2.0 doesn't support non-interpolating 'varying' variables in
+    # the shaders, so the only easy way to get flat shading is to not use
+    # a point light source.
+    L:
+      \3fv
+      vec3.normalize vec3.direction [-1,-1, 0] [0 0 5]
+
+programs.gouraud = shader-program do
+  vertex: """
+      precision mediump float;
+
+      attribute vec3 coord;
+      attribute vec3 normal;
+
+      varying vec3 aColor;
+
+      uniform mat4 ModelViewMatrix;
+      uniform mat4 ProjectionMatrix;
+      uniform mat3 NormalMatrix;
+      uniform vec3 LightLocation;
+
+      uniform float LightIntensity;
+      uniform float AmbientIntensity;
+      uniform vec3 DiffuseAndAmbientCoefficient;
+
+      void main() {
+        vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);
+        vec3 L = normalize(LightLocation - WorldCoord.xyz);
+        vec3 WorldNormal = NormalMatrix * normal;
+        vec3 N = normalize(WorldNormal);
+        float NdotL = dot(N,L);
+        aColor =
+          ((LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity) *
+          DiffuseAndAmbientCoefficient);
+
+        gl_Position = ProjectionMatrix * WorldCoord;
+      }
+    """
+  fragment: """
+      precision mediump float;
+
+      varying vec3 aColor;
+
+      void main() {
+        gl_FragColor = vec4(aColor, 1.0);
+      }
+    """
+  uniforms:
+    LightIntensity               : [\1f 0.5]
+    AmbientIntensity             : [\1f 0.5]
+    DiffuseAndAmbientCoefficient : [\3f 1 1 1]
+    LightLocation                : [\3f -1 -1 -10]
+
+
+programs.donut = shader-program do
+  vertex: """
+    \#define TWOPI #{2 * Math.PI}
+    precision mediump float;
+
+    attribute float theta;
+    attribute float phi;
+
+    varying vec2 tex;
+    varying float intensity;
+
+    uniform mat4 ModelViewMatrix;
+    uniform mat4 ProjectionMatrix;
+    uniform mat3 NormalMatrix;
+    uniform vec3 LightLocation;
+
+    uniform float LightIntensity;
+    uniform float AmbientIntensity;
+    uniform vec3 DiffuseAndAmbientCoefficient;
+
+    void main() {
+      vec3 coord = vec3( (0.75 + 0.25 * cos(phi)) * cos(theta)
+                       , (0.75 + 0.25 * cos(phi)) * sin(theta)
+                       , 0.25 * sin(phi)
+                       );
+      vec3 normal = vec3( -cos(phi) * cos(theta)
+                        , -cos(phi) * sin(theta)
+                        , -sin(phi)
+                        );
+      tex = vec2(theta/TWOPI,phi/TWOPI);
+
+      vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);
+      vec3 L = normalize(LightLocation - WorldCoord.xyz);
+      vec3 WorldNormal = NormalMatrix * normal;
+      vec3 N = normalize(WorldNormal);
+      float NdotL = dot(N,L);
+      intensity =
+        (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity);
+
+      gl_Position = ProjectionMatrix * WorldCoord;
+    }
+  """
+  fragment: """
+      precision mediump float;
+
+      uniform sampler2D texture;
+
+      varying vec2 tex; // coords
+      varying float intensity;
+
+      void main() {
+        gl_FragColor = vec4(intensity * texture2D(texture, tex).xyz, 1.0);
+      }
+  """
+  uniforms:
+    LightIntensity   : [\1f 0.5]
+    AmbientIntensity : [\1f 0.5]
+    LightLocation    : [\3f -1 -1 -10]
+

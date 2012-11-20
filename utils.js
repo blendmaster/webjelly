@@ -2,7 +2,7 @@
 original commented source there. */
 (function(){
   "use strict";
-  var log, degrees, radians, $, flatten3d, readPpm, RES, CIRCLE, RADS, makeDonut, sphereToCube, shaderProgram, defer, read, out$ = typeof exports != 'undefined' && exports || this, slice$ = [].slice;
+  var log, degrees, radians, $, flatten3d, readPpm, RES, CIRCLE, RADS, makeDonut, sphereToCube, shaderProgram, defer, reading, uniform, bindBuffer, out$ = typeof exports != 'undefined' && exports || this, slice$ = [].slice;
   mat4.translation = function(translation){
     return mat4.translate(mat4.identity(), translation);
   };
@@ -71,49 +71,53 @@ original commented source there. */
         phis[j++] = phi + RADS;
       }
     }
-    return [thetas, phis];
+    return {
+      thetas: thetas,
+      phis: phis
+    };
   };
   out$.sphereToCube = sphereToCube = function(gl, sphere){
     return stuff;
   };
-  out$.shaderProgram = shaderProgram = function(gl, arg$){
-    var vertex, fragment, init, ref$, uniforms, x$, vertexShader, fragmentShader, program;
-    vertex = arg$.vertex, fragment = arg$.fragment, init = arg$.init, uniforms = (ref$ = arg$.uniforms) != null
+  out$.shaderProgram = shaderProgram = function(arg$){
+    var vertex, fragment, ref$, uniforms;
+    vertex = arg$.vertex, fragment = arg$.fragment, uniforms = (ref$ = arg$.uniforms) != null
       ? ref$
       : {};
-    x$ = vertexShader = gl.createShader(gl.VERTEX_SHADER);
-    gl.shaderSource(x$, vertex);
-    gl.compileShader(x$);
-    if (!gl.getShaderParameter(x$, COMPILE_STATUS)) {
-      throw new Error("couldn't compile vertex shader!\n" + gl.getShaderInfoLog(x$));
-    }
-    x$ = fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
-    gl.shaderSource(x$, fragment);
-    gl.compileShader(x$);
-    if (!gl.getShaderParameter(x$, COMPILE_STATUS)) {
-      throw new Error("couldn't compile fragment shader!\n" + gl.getShaderInfoLog(x$));
-    }
-    x$ = program = gl.createProgram();
-    gl.attachShader(x$, vertexShader);
-    gl.attachShader(x$, fragmentShader);
-    gl.linkProgram(x$);
-    if (!gl.getProgramParameter(x$, LINK_STATUS)) {
-      throw new Error("couldn't intialize shader program!");
-    }
-    return function(){
-      var name, ref$, ref1$, type, value;
+    return function(gl){
+      var x$, vertexShader, fragmentShader, program, name, ref$, ref1$, type, value, results$ = [];
+      x$ = vertexShader = gl.createShader(gl.VERTEX_SHADER);
+      gl.shaderSource(x$, vertex);
+      gl.compileShader(x$);
+      if (!gl.getShaderParameter(x$, COMPILE_STATUS)) {
+        throw new Error("couldn't compile vertex shader!\n" + gl.getShaderInfoLog(x$));
+      }
+      x$ = fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+      gl.shaderSource(x$, fragment);
+      gl.compileShader(x$);
+      if (!gl.getShaderParameter(x$, COMPILE_STATUS)) {
+        throw new Error("couldn't compile fragment shader!\n" + gl.getShaderInfoLog(x$));
+      }
+      x$ = program = gl.createProgram();
+      gl.attachShader(x$, vertexShader);
+      gl.attachShader(x$, fragmentShader);
+      gl.linkProgram(x$);
+      if (!gl.getProgramParameter(x$, LINK_STATUS)) {
+        throw new Error("couldn't intialize shader program!");
+      }
+      gl.program = program;
       gl.useProgram(program);
       for (name in ref$ = uniforms) {
         ref1$ = ref$[name], type = ref1$[0], value = slice$.call(ref1$, 1);
-        gl["uniform" + type].apply(gl, [gl.getUniformLocation(program, name)].concat(value));
+        results$.push(gl["uniform" + type].apply(gl, [gl.getUniformLocation(program, name)].concat(value)));
       }
-      init(gl, program);
+      return results$;
     };
   };
-  defer = function(t, fn){
+  out$.defer = defer = function(t, fn){
     return setTimeout(fn, t);
   };
-  out$.read = read = function(id, readerFn, fn){
+  out$.reading = reading = function(id, readerFn, fn){
     var onchange, x$;
     onchange = function(){
       var that, x$;
@@ -125,8 +129,19 @@ original commented source there. */
         x$["read" + readerFn](that);
       }
     };
-    return (x$ = $(id), x$.addEventListener('change', onchange), defer(10, function(){
-      onchange.call(x$);
-    }));
+    return (x$ = $(id), x$.addEventListener('change', onchange), onchange.call(x$));
+  };
+  out$.uniform = uniform = function(gl, name, type, value){
+    return gl["uniform" + type](gl.getUniformLocation(gl.program, name), false, value);
+  };
+  out$.bindBuffer = bindBuffer = function(gl, name, value, elementLength){
+    var x$, buf, y$;
+    x$ = buf = gl.createBuffer();
+    gl.bindBuffer(ARRAY_BUFFER, x$);
+    gl.bufferData(ARRAY_BUFFER, value, STATIC_DRAW);
+    y$ = gl.getAttribLocation(gl.program, name);
+    gl.enableVertexAttribArray(y$);
+    gl.vertexAttribPointer(y$, elementLength, gl.FLOAT, false, 0, 0);
+    return buf;
   };
 }).call(this);

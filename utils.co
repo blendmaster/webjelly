@@ -53,7 +53,7 @@ const
   RADS   = CIRCLE / RES
 
 # generates a torus model
-# returns [thetas, phis] in Triangles order
+# returns {thetas, phis} in Triangles order
 export make-donut = ->
   thetas = new Float32Array RES * RES * 2 * 3
   phis   = new Float32Array RES * RES * 2 * 3
@@ -73,7 +73,7 @@ export make-donut = ->
       thetas[i++] = theta - RADS ; phis[j++] = phi + RADS
       thetas[i++] = theta        ; phis[j++] = phi + RADS
 
-  return [thetas, phis]
+  return {thetas, phis}
 
 # convert a sphere map to a cube map, which webGL can handle natively
 # returns the cube map
@@ -82,7 +82,7 @@ export sphere-to-cube = (gl, sphere) ->
 
 # from vertex and fragment glsl source, a function that attaches the program
 # and runs initialization code provided
-export shader-program = (gl, {vertex, fragment, init, uniforms ? {}}) ->
+export shader-program = ({vertex, fragment, uniforms ? {}}) -> (gl) ->
   vertex-shader = gl.createShader gl.VERTEX_SHADER
     gl.shaderSource (&), vertex
     gl.compileShader (&)
@@ -102,19 +102,18 @@ export shader-program = (gl, {vertex, fragment, init, uniforms ? {}}) ->
     unless gl.getProgramParameter (&), LINK_STATUS
       throw new Error "couldn't intialize shader program!"
 
-  !->
-    gl.useProgram program
-    for name, [type, ...value] in uniforms
-      gl"uniform#type".apply do
-        gl
-        [gl.getUniformLocation program, name].concat value
+  gl.program = program # handy shortcut
+  gl.useProgram program
+  for name, [type, ...value] in uniforms
+    gl"uniform#type".apply do
+      gl
+      [gl.getUniformLocation program, name].concat value
 
-    init gl, program
 
-defer = (t, fn) -> setTimeout fn, t
+export defer = (t, fn) -> setTimeout fn, t
 
 # change handler for a file input
-export read = (id, reader-fn, fn) ->
+export reading = (id, reader-fn, fn) ->
   onchange = !->
     if @files.0
       new FileReader
@@ -123,7 +122,29 @@ export read = (id, reader-fn, fn) ->
 
   $ id
     &addEventListener \change onchange
-    # after everything's done, try to grab already selected file
-    defer 10ms !-> onchange.call (&)
+    onchange.call (&) # handle initial state
 
+# sets uniform without verbosity; expects gl.program to be program
+export uniform = (gl, name, type, value) ->
+  gl"uniform#type" do
+    gl.getUniformLocation gl.program, name
+    false
+    value
+
+# binds attribute buffer without verbosity; expects gl.program to be program
+# returns buffer
+export bind-buffer = (gl, name, value, element-length) ->
+  buf = gl.createBuffer!
+    gl.bindBuffer ARRAY_BUFFER, (&)
+    gl.bufferData do
+      ARRAY_BUFFER
+      value
+      STATIC_DRAW
+
+    # bind to varying coordiantes
+    gl.getAttribLocation gl.program, name
+      gl.enableVertexAttribArray (&)
+      gl.vertexAttribPointer (&), element-length, gl.FLOAT, false 0 0
+
+  return buf
 

@@ -2,7 +2,7 @@
 original commented source there. */
 (function(){
   "use strict";
-  var canvas, width, height, k, ref$, v, shading, x$, fov, flatProgram, gouraudProgram, donutTexture, donutProgram, triangles, vertices, verticesBuffer, normalsBuffer, trianglesBuffer, staging, distance, rotation, currentRot, gouraud, coords, flat, calculateNormalsAndFlats, currentProgram, thetas, phis, thetaBuffer, phiBuffer, setupBuffers, resetStage, draw, pointUnder, out$ = typeof exports != 'undefined' && exports || this;
+  var canvas, width, height, k, ref$, v, x$, rotation, currentRot, fov, distance, mode, model, buffers, textures, thetas, phis, i$, len$, prog, calculateNormalsAndFlats, setupBuffers, draw, initialMode, pointUnder, out$ = typeof exports != 'undefined' && exports || this;
   canvas = document.getElementById('canvas');
   width = canvas.width, height = canvas.height;
   try {
@@ -18,26 +18,12 @@ original commented source there. */
       window[k] = v;
     }
   }
-  x$ = $('flat');
-  if (x$.checked) {
-    shading = 'flat';
-  }
-  x$.addEventListener('click', function(){
-    shading = 'flat';
-    flatProgram();
-    setupBuffers();
-    draw();
-  });
-  x$ = $('gouraud');
-  if (x$.checked) {
-    shading = 'gouraud';
-  }
-  x$.addEventListener('click', function(){
-    shading = 'gouraud';
-    gouraudProgram();
-    setupBuffers();
-    draw();
-  });
+  x$ = gl;
+  x$.viewport(0, 0, width, height);
+  x$.enable(DEPTH_TEST);
+  x$.enable(CULL_FACE);
+  x$.clearColor(0, 0, 0, 1);
+  x$.clear(COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT);
   x$ = $('front');
   if (x$.checked) {
     gl.cullFace(FRONT);
@@ -54,6 +40,13 @@ original commented source there. */
     gl.cullFace(BACK);
     draw();
   });
+  function resetStage(){
+    rotation = mat4.identity();
+    currentRot = mat4.identity();
+    fov = 15;
+    distance = 1 / Math.tan(radians(fov) / 2);
+  }
+  resetStage();
   $('zoom-in').addEventListener('click', function(){
     --fov;
     draw();
@@ -62,66 +55,23 @@ original commented source there. */
     ++fov;
     draw();
   });
-  x$ = gl;
-  x$.viewport(0, 0, width, height);
-  x$.enable(DEPTH_TEST);
-  x$.enable(CULL_FACE);
-  x$.clearColor(0, 0, 0, 1);
-  x$.clear(COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT);
-  flatProgram = shaderProgram(gl, {
-    vertex: "attribute vec3 coord;\nattribute vec3 normal;\n\nvarying float NdotL;\n\nuniform mat4 ModelViewMatrix;\nuniform mat4 ProjectionMatrix;\nuniform mat3 NormalMatrix;\nuniform vec3 L;\n\nvoid main() {\n  vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);\n  vec3 WorldNormal = NormalMatrix * normal;\n  vec3 N = normalize(WorldNormal);\n  NdotL = dot(N,L);\n  gl_Position = ProjectionMatrix * WorldCoord;\n}",
-    fragment: "precision mediump float;\n\nvarying float NdotL;\n\nuniform float LightIntensity;\nuniform float AmbientIntensity;\nuniform vec3 DiffuseAndAmbientCoefficient;\n\nvoid main() {\n  gl_FragColor = vec4(\n    (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity) *\n    DiffuseAndAmbientCoefficient,\n    1);\n}",
-    uniforms: {
-      LightIntensity: ['1f', 0.9],
-      AmbientIntensity: ['1f', 0.2],
-      DiffuseAndAmbientCoefficient: ['3f', 1, 1, 1],
-      L: ['3fv', vec3.normalize(vec3.direction([-1, -1, 0], [0, 0, 5]))]
-    },
-    init: function(gl, program){
-      window.program = program;
-    }
-  });
-  gouraudProgram = shaderProgram(gl, {
-    vertex: "precision mediump float;\n\nattribute vec3 coord;\nattribute vec3 normal;\n\nvarying vec3 aColor;\n\nuniform mat4 ModelViewMatrix;\nuniform mat4 ProjectionMatrix;\nuniform mat3 NormalMatrix;\nuniform vec3 LightLocation;\n\nuniform float LightIntensity;\nuniform float AmbientIntensity;\nuniform vec3 DiffuseAndAmbientCoefficient;\n\nvoid main() {\n  vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);\n  vec3 L = normalize(LightLocation - WorldCoord.xyz);\n  vec3 WorldNormal = NormalMatrix * normal;\n  vec3 N = normalize(WorldNormal);\n  float NdotL = dot(N,L);\n  aColor =\n    ((LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity) *\n    DiffuseAndAmbientCoefficient);\n\n  gl_Position = ProjectionMatrix * WorldCoord;\n}",
-    fragment: "precision mediump float;\n\nvarying vec3 aColor;\n\nvoid main() {\n  gl_FragColor = vec4(aColor, 1.0);\n}",
-    uniforms: {
-      LightIntensity: ['1f', 0.5],
-      AmbientIntensity: ['1f', 0.5],
-      DiffuseAndAmbientCoefficient: ['3f', 1, 1, 1],
-      LightLocation: ['3f', -1, -1, -10]
-    },
-    init: function(gl, program){
-      window.program = program;
-    }
-  });
-  read('donut-texture', 'AsBinaryString', function(it){
-    donutTexture = readPpm(gl, it);
-    if (currentProgram === 'donut') {
-      setupBuffers();
-      resetStage();
-      draw();
-    }
-  });
-  donutProgram = shaderProgram(gl, {
-    vertex: "#define TWOPI " + 2 * Math.PI + "\nprecision mediump float;\n\nattribute float theta;\nattribute float phi;\n\nvarying vec2 tex;\nvarying float intensity;\n\nuniform mat4 ModelViewMatrix;\nuniform mat4 ProjectionMatrix;\nuniform mat3 NormalMatrix;\nuniform vec3 LightLocation;\n\nuniform float LightIntensity;\nuniform float AmbientIntensity;\nuniform vec3 DiffuseAndAmbientCoefficient;\n\nvoid main() {\n  vec3 coord = vec3( (0.75 + 0.25 * cos(phi)) * cos(theta)\n                   , (0.75 + 0.25 * cos(phi)) * sin(theta)\n                   , 0.25 * sin(phi)\n                   );\n  vec3 normal = vec3( -cos(phi) * cos(theta)\n                    , -cos(phi) * sin(theta)\n                    , -sin(phi)\n                    );\n  tex = vec2(theta/TWOPI,phi/TWOPI);\n\n  vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);\n  vec3 L = normalize(LightLocation - WorldCoord.xyz);\n  vec3 WorldNormal = NormalMatrix * normal;\n  vec3 N = normalize(WorldNormal);\n  float NdotL = dot(N,L);\n  intensity =\n    (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity);\n\n  gl_Position = ProjectionMatrix * WorldCoord;\n}",
-    fragment: "precision mediump float;\n\nuniform sampler2D texture;\n\nvarying vec2 tex; // coords\nvarying float intensity;\n\nvoid main() {\n  gl_FragColor = vec4(intensity * texture2D(texture, tex).xyz, 1.0);\n}",
-    uniforms: {
-      LightIntensity: ['1f', 0.5],
-      AmbientIntensity: ['1f', 0.5],
-      LightLocation: ['3f', -1, -1, -10]
-    },
-    init: function(gl, program){
-      window.program = program;
-    }
-  });
-  staging = mat4.identity();
-  currentRot = mat4.identity();
+  model = {
+    loaded: false
+  };
+  buffers = {};
+  textures = {};
+  ref$ = makeDonut(), thetas = ref$.thetas, phis = ref$.phis;
+  for (i$ = 0, len$ = (ref$ = ['flat', 'gouraud', 'environment', 'threedee', 'donut']).length; i$ < len$; ++i$) {
+    prog = ref$[i$];
+    (fn$.call(this, $(prog), prog));
+  }
   calculateNormalsAndFlats = function(){
-    var slice, vertNorms, j, i, to$, a, b, c, v0, v1, v2, cross, ref$, minz, miny, minx, maxz, maxy, maxx, x$, toCenter, _, toStage;
+    var slice, triangles, vertices, vertNorms, coords, flat, j, i, to$, a, b, c, v0, v1, v2, cross, gouraud, ref$, minz, miny, minx, maxz, maxy, maxx, x$, toCenter, _, toStage, staging;
     slice = Array.prototype.slice;
+    triangles = model.triangles, vertices = model.vertices;
     vertNorms = new Float32Array(vertices.length);
-    coords = new Float32Array(triangles.length * 3);
-    flat = new Float32Array(triangles.length * 3);
+    model.coords = coords = new Float32Array(triangles.length * 3);
+    model.flat = flat = new Float32Array(triangles.length * 3);
     j = 0;
     for (i = 0, to$ = triangles.length; i < to$; i += 3) {
       a = triangles[i] * 3;
@@ -143,7 +93,7 @@ original commented source there. */
       j += 9;
     }
     j = 0;
-    gouraud = new Float32Array(triangles.length * 3);
+    model.gouraud = gouraud = new Float32Array(triangles.length * 3);
     for (i = 0, to$ = triangles.length; i < to$; i += 3) {
       a = triangles[i] * 3;
       b = triangles[i + 1] * 3;
@@ -171,88 +121,76 @@ original commented source there. */
     staging = mat4.identity();
     mat4.scale(staging, toStage);
     mat4.translate(staging, toCenter);
+    model.staging = staging;
   };
-  currentProgram = 'reg';
-  ref$ = makeDonut(), thetas = ref$[0], phis = ref$[1];
+  function isReady(){
+    return (mode === 'donut' && textures.donut != null) || (model.loaded && ((mode === 'environment' && textures.environment != null) || (mode === 'threedee' && textures.threedee != null) || mode === 'flat' || mode === 'gouraud'));
+  }
   setupBuffers = function(){
-    var x$, y$;
-    if (currentProgram === 'donut') {
-      donutProgram();
-      if (donutTexture != null) {
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, donutTexture);
-        gl.uniform1i(gl.getUniformLocation(program, 'texture'), 0);
-      }
-      x$ = thetaBuffer = gl.createBuffer();
-      gl.bindBuffer(ARRAY_BUFFER, x$);
-      gl.bufferData(ARRAY_BUFFER, thetas, STATIC_DRAW);
-      y$ = gl.getAttribLocation(program, 'theta');
-      gl.enableVertexAttribArray(y$);
-      gl.vertexAttribPointer(y$, 1, FLOAT, false, 0, 0);
-      x$ = phiBuffer = gl.createBuffer();
-      gl.bindBuffer(ARRAY_BUFFER, x$);
-      gl.bufferData(ARRAY_BUFFER, phis, STATIC_DRAW);
-      y$ = gl.getAttribLocation(program, 'phi');
-      gl.enableVertexAttribArray(y$);
-      gl.vertexAttribPointer(y$, 1, FLOAT, false, 0, 0);
-    } else {
-      x$ = verticesBuffer = gl.createBuffer();
-      gl.bindBuffer(ARRAY_BUFFER, x$);
-      gl.bufferData(ARRAY_BUFFER, coords, STATIC_DRAW);
-      y$ = gl.getAttribLocation(program, 'coord');
-      gl.enableVertexAttribArray(y$);
-      gl.vertexAttribPointer(y$, 3, FLOAT, false, 0, 0);
-      x$ = normalsBuffer = gl.createBuffer();
-      gl.bindBuffer(ARRAY_BUFFER, x$);
-      gl.bufferData(ARRAY_BUFFER, shading === 'flat' ? flat : gouraud, STATIC_DRAW);
-      y$ = gl.getAttribLocation(program, 'normal');
-      gl.enableVertexAttribArray(y$);
-      gl.vertexAttribPointer(y$, 3, FLOAT, false, 0, 0);
+    if (!isReady()) {
+      return;
     }
-  };
-  resetStage = function(){
-    rotation = mat4.identity();
-    currentRot = mat4.identity();
-    fov = 15;
-    distance = 1 / Math.tan(radians(fov) / 2);
+    if (mode === 'donut') {
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, textures.donut);
+      uniform(gl, 'texture', '1i', 0);
+      buffers.theta = bindBuffer(gl, 'theta', thetas, 1);
+      buffers.phi = bindBuffer(gl, 'phi', phis, 1);
+    } else {
+      buffers.vertices = bindBuffer(gl, 'coord', model.coords, 3);
+      buffers.normals = bindBuffer(gl, 'normal', model[mode === 'flat' ? 'flat' : 'gouraud'], 3);
+    }
   };
   out$.draw = draw = function(){
     var rot, modelView;
+    if (!isReady()) {
+      return;
+    }
     gl.clear(COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT);
     if (currentRot == null) {
       currentRot = mat4.identity();
     }
     rot = mat4.multiply(currentRot, rotation, mat4.create());
-    gl.uniformMatrix4fv(gl.getUniformLocation(program, 'ProjectionMatrix'), false, mat4.perspective(fov, width / height, distance - 1, distance + 3));
-    gl.uniformMatrix3fv(gl.getUniformLocation(program, 'NormalMatrix'), false, mat4.toMat3(rot));
+    uniform(gl, 'NormalMatrix', 'Matrix3fv', mat4.toMat3(rot));
+    uniform(gl, 'ProjectionMatrix', 'Matrix4fv', mat4.perspective(fov, width / height, distance - 1, distance + 3));
     modelView = mat4.identity();
     mat4.translate(modelView, [0, 0, -(distance + 1)]);
     mat4.multiply(modelView, rot);
-    mat4.multiply(modelView, staging);
-    gl.uniformMatrix4fv(gl.getUniformLocation(program, 'ModelViewMatrix'), false, modelView);
-    if (currentProgram === 'donut') {
-      gl.bindBuffer(ARRAY_BUFFER, thetaBuffer);
+    if (mode !== 'donut') {
+      mat4.multiply(modelView, model.staging);
+    }
+    uniform(gl, 'ModelViewMatrix', 'Matrix4fv', modelView);
+    if (mode === 'donut') {
+      gl.bindBuffer(ARRAY_BUFFER, buffers.theta);
       gl.drawArrays(TRIANGLES, 0, thetas.length);
     } else {
-      gl.bindBuffer(ARRAY_BUFFER, verticesBuffer);
-      gl.drawArrays(TRIANGLES, 0, triangles.length);
+      gl.bindBuffer(ARRAY_BUFFER, buffers.vertices);
+      gl.drawArrays(TRIANGLES, 0, model.triangles.length);
     }
   };
-  read('file', 'AsText', function(it){
+  initialMode = mode;
+  reading('donut-texture', 'AsBinaryString', function(it){
+    textures.donut = readPpm(gl, it);
+    resetStage();
+    $('donut').disabled = false;
+    if (initialMode === 'donut') {
+      $('donut').click();
+    }
+  });
+  reading('file', 'AsText', function(it){
     var tokens, ref$, numTriangles, numVertices;
     tokens = it.split(/\s+/).map(parseFloat);
     ref$ = tokens.splice(0, 2), numTriangles = ref$[0], numVertices = ref$[1];
-    triangles = new Uint16Array(tokens.splice(0, numTriangles * 3));
-    vertices = new Float32Array(tokens.splice(0, numVertices * 3));
-    if (shading === 'flat') {
-      flatProgram();
-    } else {
-      gouraudProgram();
-    }
-    calculateNormalsAndFlats();
-    setupBuffers();
+    model.triangles = new Uint16Array(tokens.splice(0, numTriangles * 3));
+    model.vertices = new Float32Array(tokens.splice(0, numVertices * 3));
+    model.loaded = true;
     resetStage();
-    draw();
+    calculateNormalsAndFlats();
+    $('flat').disabled = false;
+    $('gouraud').disabled = false;
+    if (initialMode !== 'donut') {
+      $(mode).click();
+    }
   });
   pointUnder = function(x, y){
     var ref$, left, top, det;
@@ -270,7 +208,7 @@ original commented source there. */
   x$.addEventListener('mousedown', function(arg$){
     var i0, j0, p, rotate, stop;
     i0 = arg$.clientX, j0 = arg$.clientY;
-    if (currentRot == null) {
+    if (!isReady()) {
       return;
     }
     x$.style.cursor = 'move';
@@ -303,4 +241,19 @@ original commented source there. */
     x$.addEventListener('mouseup', stop);
     x$.addEventListener('mouseleave', stop);
   });
+  function fn$(el, prog){
+    if (el.checked) {
+      mode = prog;
+      load(prog, gl);
+    }
+    el.addEventListener('click', function(){
+      if (this.disabled) {
+        return;
+      }
+      mode = prog;
+      load(prog, gl);
+      setupBuffers();
+      draw();
+    });
+  }
 }).call(this);
