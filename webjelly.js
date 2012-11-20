@@ -2,7 +2,7 @@
 original commented source there. */
 (function(){
   "use strict";
-  var canvas, width, height, k, ref$, v, shading, x$, fov, flatLightDirection, flatProgram, gouraudProgram, donutTexture, donutProgram, triangles, vertices, verticesBuffer, normalsBuffer, trianglesBuffer, staging, distance, rotation, currentRot, gouraud, coords, flat, calculateNormalsAndFlats, currentProgram, thetas, phis, thetaBuffer, phiBuffer, setupBuffers, resetStage, draw, pointUnder, out$ = typeof exports != 'undefined' && exports || this;
+  var canvas, width, height, k, ref$, v, shading, x$, fov, flatProgram, gouraudProgram, donutTexture, donutProgram, triangles, vertices, verticesBuffer, normalsBuffer, trianglesBuffer, staging, distance, rotation, currentRot, gouraud, coords, flat, calculateNormalsAndFlats, currentProgram, thetas, phis, thetaBuffer, phiBuffer, setupBuffers, resetStage, draw, pointUnder, out$ = typeof exports != 'undefined' && exports || this;
   canvas = document.getElementById('canvas');
   width = canvas.width, height = canvas.height;
   try {
@@ -68,46 +68,54 @@ original commented source there. */
   x$.enable(CULL_FACE);
   x$.clearColor(0, 0, 0, 1);
   x$.clear(COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT);
-  flatLightDirection = vec3.normalize(vec3.direction([-1, -1, 0], [0, 0, 5]));
   flatProgram = shaderProgram(gl, {
-    vertex: "attribute vec3 coord;\nattribute vec3 normal;\n\nvarying float NdotL;\n\nuniform mat4 ModelViewMatrix;\nuniform mat4 ProjectionMatrix;\nuniform mat3 NormalMatrix;\nuniform vec3 L;\n\nvoid main() {\n  vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);   // convert to world coordinates\n  vec3 WorldNormal = NormalMatrix * normal;                // normal in world coordinates\n  vec3 N = normalize(WorldNormal);                       // N vector for illumination\n  NdotL = dot(N,L);                                      // part of diffuse term (multiplied by k_d's etc in the fragment shader)\n  gl_Position = ProjectionMatrix * WorldCoord;             // gl_Position is a predefined variable\n    // a correctly written vertex shader should write screen space coordinates to gl_Position\n    // they are used on the rasterization stage!\n}",
-    fragment: "precision mediump float;\n\nvarying float NdotL;   // interpolated NdotL values (output of the vertex shader!)\n\nuniform float LightIntensity;\nuniform float AmbientIntensity;\nuniform vec3 DiffuseAndAmbientCoefficient;     // for RGB: this is why it's a 3D vector\n\nvoid main() {\n  gl_FragColor = vec4(\n    (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity) *\n    DiffuseAndAmbientCoefficient,\n    1);\n  // note that some simplifying assumptions are made in the above formula\n  //  for example, k_a=k_d is used; also, specular term is not used; also, no attenuation here\n}",
+    vertex: "attribute vec3 coord;\nattribute vec3 normal;\n\nvarying float NdotL;\n\nuniform mat4 ModelViewMatrix;\nuniform mat4 ProjectionMatrix;\nuniform mat3 NormalMatrix;\nuniform vec3 L;\n\nvoid main() {\n  vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);\n  vec3 WorldNormal = NormalMatrix * normal;\n  vec3 N = normalize(WorldNormal);\n  NdotL = dot(N,L);\n  gl_Position = ProjectionMatrix * WorldCoord;\n}",
+    fragment: "precision mediump float;\n\nvarying float NdotL;\n\nuniform float LightIntensity;\nuniform float AmbientIntensity;\nuniform vec3 DiffuseAndAmbientCoefficient;\n\nvoid main() {\n  gl_FragColor = vec4(\n    (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity) *\n    DiffuseAndAmbientCoefficient,\n    1);\n}",
+    uniforms: {
+      LightIntensity: ['1f', 0.9],
+      AmbientIntensity: ['1f', 0.2],
+      DiffuseAndAmbientCoefficient: ['3f', 1, 1, 1],
+      L: ['3fv', vec3.normalize(vec3.direction([-1, -1, 0], [0, 0, 5]))]
+    },
     init: function(gl, program){
       window.program = program;
-      this.uniform1f(this.getUniformLocation(program, 'LightIntensity'), 0.9);
-      this.uniform1f(this.getUniformLocation(program, 'AmbientIntensity'), 0.2);
-      this.uniform3f(this.getUniformLocation(program, 'DiffuseAndAmbientCoefficient'), 1, 1, 1);
-      this.uniform3fv(this.getUniformLocation(program, 'L'), flatLightDirection);
     }
   });
   gouraudProgram = shaderProgram(gl, {
     vertex: "precision mediump float;\n\nattribute vec3 coord;\nattribute vec3 normal;\n\nvarying vec3 aColor;\n\nuniform mat4 ModelViewMatrix;\nuniform mat4 ProjectionMatrix;\nuniform mat3 NormalMatrix;\nuniform vec3 LightLocation;\n\nuniform float LightIntensity;\nuniform float AmbientIntensity;\nuniform vec3 DiffuseAndAmbientCoefficient;\n\nvoid main() {\n  vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);\n  vec3 L = normalize(LightLocation - WorldCoord.xyz);\n  vec3 WorldNormal = NormalMatrix * normal;\n  vec3 N = normalize(WorldNormal);\n  float NdotL = dot(N,L);\n  aColor =\n    ((LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity) *\n    DiffuseAndAmbientCoefficient);\n\n  gl_Position = ProjectionMatrix * WorldCoord;\n}",
-    fragment: "precision mediump float;\n\nvarying vec3 aColor;\n\nvoid main() {\n  gl_FragColor = vec4(aColor, 1.0);\n  //  (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity) *\n   // DiffuseAndAmbientCoefficient,\n   // 1);\n}",
+    fragment: "precision mediump float;\n\nvarying vec3 aColor;\n\nvoid main() {\n  gl_FragColor = vec4(aColor, 1.0);\n}",
+    uniforms: {
+      LightIntensity: ['1f', 0.5],
+      AmbientIntensity: ['1f', 0.5],
+      DiffuseAndAmbientCoefficient: ['3f', 1, 1, 1],
+      LightLocation: ['3f', -1, -1, -10]
+    },
     init: function(gl, program){
       window.program = program;
-      gl.uniform1f(gl.getUniformLocation(program, 'LightIntensity'), 0.9);
-      gl.uniform1f(gl.getUniformLocation(program, 'AmbientIntensity'), 0.2);
-      gl.uniform3f(gl.getUniformLocation(program, 'DiffuseAndAmbientCoefficient'), 1, 1, 1);
-      gl.uniform3fv(gl.getUniformLocation(program, 'LightLocation'), [-1, -1, -10]);
     }
   });
   read('donut-texture', 'AsBinaryString', function(it){
     donutTexture = readPpm(gl, it);
-    setupBuffers();
-    resetStage();
-    draw();
+    if (currentProgram === 'donut') {
+      setupBuffers();
+      resetStage();
+      draw();
+    }
   });
   donutProgram = shaderProgram(gl, {
     vertex: "#define TWOPI " + 2 * Math.PI + "\nprecision mediump float;\n\nattribute float theta;\nattribute float phi;\n\nvarying vec2 tex;\nvarying float intensity;\n\nuniform mat4 ModelViewMatrix;\nuniform mat4 ProjectionMatrix;\nuniform mat3 NormalMatrix;\nuniform vec3 LightLocation;\n\nuniform float LightIntensity;\nuniform float AmbientIntensity;\nuniform vec3 DiffuseAndAmbientCoefficient;\n\nvoid main() {\n  vec3 coord = vec3( (0.75 + 0.25 * cos(phi)) * cos(theta)\n                   , (0.75 + 0.25 * cos(phi)) * sin(theta)\n                   , 0.25 * sin(phi)\n                   );\n  vec3 normal = vec3( -cos(phi) * cos(theta)\n                    , -cos(phi) * sin(theta)\n                    , -sin(phi)\n                    );\n  tex = vec2(theta/TWOPI,phi/TWOPI);\n\n  vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);\n  vec3 L = normalize(LightLocation - WorldCoord.xyz);\n  vec3 WorldNormal = NormalMatrix * normal;\n  vec3 N = normalize(WorldNormal);\n  float NdotL = dot(N,L);\n  intensity =\n    (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity);\n\n  gl_Position = ProjectionMatrix * WorldCoord;\n}",
     fragment: "precision mediump float;\n\nuniform sampler2D texture;\n\nvarying vec2 tex; // coords\nvarying float intensity;\n\nvoid main() {\n  gl_FragColor = vec4(intensity * texture2D(texture, tex).xyz, 1.0);\n}",
+    uniforms: {
+      LightIntensity: ['1f', 0.5],
+      AmbientIntensity: ['1f', 0.5],
+      LightLocation: ['3f', -1, -1, -10]
+    },
     init: function(gl, program){
       window.program = program;
-      gl.uniform1f(gl.getUniformLocation(program, 'LightIntensity'), 0.5);
-      gl.uniform1f(gl.getUniformLocation(program, 'AmbientIntensity'), 0.5);
-      gl.uniform3fv(gl.getUniformLocation(program, 'LightLocation'), [-1, -1, -10]);
     }
   });
   staging = mat4.identity();
+  currentRot = mat4.identity();
   calculateNormalsAndFlats = function(){
     var slice, vertNorms, j, i, to$, a, b, c, v0, v1, v2, cross, ref$, minz, miny, minx, maxz, maxy, maxx, x$, toCenter, _, toStage;
     slice = Array.prototype.slice;
@@ -164,7 +172,7 @@ original commented source there. */
     mat4.scale(staging, toStage);
     mat4.translate(staging, toCenter);
   };
-  currentProgram = 'donut';
+  currentProgram = 'reg';
   ref$ = makeDonut(), thetas = ref$[0], phis = ref$[1];
   setupBuffers = function(){
     var x$, y$;
@@ -211,6 +219,9 @@ original commented source there. */
   out$.draw = draw = function(){
     var rot, modelView;
     gl.clear(COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT);
+    if (currentRot == null) {
+      currentRot = mat4.identity();
+    }
     rot = mat4.multiply(currentRot, rotation, mat4.create());
     gl.uniformMatrix4fv(gl.getUniformLocation(program, 'ProjectionMatrix'), false, mat4.perspective(fov, width / height, distance - 1, distance + 3));
     gl.uniformMatrix3fv(gl.getUniformLocation(program, 'NormalMatrix'), false, mat4.toMat3(rot));

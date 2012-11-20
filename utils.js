@@ -2,7 +2,7 @@
 original commented source there. */
 (function(){
   "use strict";
-  var log, degrees, radians, $, flatten3d, readPpm, RES, CIRCLE, RADS, makeDonut, sphereToCube, shaderProgram, defer, read, out$ = typeof exports != 'undefined' && exports || this;
+  var log, degrees, radians, $, flatten3d, readPpm, RES, CIRCLE, RADS, makeDonut, sphereToCube, shaderProgram, defer, read, out$ = typeof exports != 'undefined' && exports || this, slice$ = [].slice;
   mat4.translation = function(translation){
     return mat4.translate(mat4.identity(), translation);
   };
@@ -77,8 +77,10 @@ original commented source there. */
     return stuff;
   };
   out$.shaderProgram = shaderProgram = function(gl, arg$){
-    var vertex, fragment, init, x$, vertexShader, fragmentShader, program;
-    vertex = arg$.vertex, fragment = arg$.fragment, init = arg$.init;
+    var vertex, fragment, init, ref$, uniforms, x$, vertexShader, fragmentShader, program;
+    vertex = arg$.vertex, fragment = arg$.fragment, init = arg$.init, uniforms = (ref$ = arg$.uniforms) != null
+      ? ref$
+      : {};
     x$ = vertexShader = gl.createShader(gl.VERTEX_SHADER);
     gl.shaderSource(x$, vertex);
     gl.compileShader(x$);
@@ -99,7 +101,12 @@ original commented source there. */
       throw new Error("couldn't intialize shader program!");
     }
     return function(){
+      var name, ref$, ref1$, type, value;
       gl.useProgram(program);
+      for (name in ref$ = uniforms) {
+        ref1$ = ref$[name], type = ref1$[0], value = slice$.call(ref1$, 1);
+        gl["uniform" + type].apply(gl, [gl.getUniformLocation(program, name)].concat(value));
+      }
       init(gl, program);
     };
   };

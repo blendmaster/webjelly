@@ -82,7 +82,7 @@ export sphere-to-cube = (gl, sphere) ->
 
 # from vertex and fragment glsl source, a function that attaches the program
 # and runs initialization code provided
-export shader-program = (gl, {vertex, fragment, init}) ->
+export shader-program = (gl, {vertex, fragment, init, uniforms ? {}}) ->
   vertex-shader = gl.createShader gl.VERTEX_SHADER
     gl.shaderSource (&), vertex
     gl.compileShader (&)
@@ -104,6 +104,11 @@ export shader-program = (gl, {vertex, fragment, init}) ->
 
   !->
     gl.useProgram program
+    for name, [type, ...value] in uniforms
+      gl"uniform#type".apply do
+        gl
+        [gl.getUniformLocation program, name].concat value
+
     init gl, program
 
 defer = (t, fn) -> setTimeout fn, t

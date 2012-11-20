@@ -73,16 +73,12 @@ $ \zoom-out .addEventListener \click !->
 gl
   &viewport   0 0 width, height
 
-  &enable    DEPTH_TEST
+  &enable     DEPTH_TEST
 
   &enable     CULL_FACE
 
   &clearColor 0 0 0 1 # black
   &clear      COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT
-
-# OpenGL ES 2.0 doesn't support non-interpolating 'varying' variables in the shaders,
-# so the only easy way to get flat shading is to not use a point light source.
-flat-light-direction = vec3.normalize vec3.direction [-1,-1, 0] [0 0 5]
 
 flat-program = shader-program gl,
   vertex: """
@@ -97,53 +93,43 @@ flat-program = shader-program gl,
       uniform vec3 L;
 
       void main() {
-        vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);   // convert to world coordinates
-        vec3 WorldNormal = NormalMatrix * normal;                // normal in world coordinates
-        vec3 N = normalize(WorldNormal);                       // N vector for illumination
-        NdotL = dot(N,L);                                      // part of diffuse term (multiplied by k_d's etc in the fragment shader)
-        gl_Position = ProjectionMatrix * WorldCoord;             // gl_Position is a predefined variable
-          // a correctly written vertex shader should write screen space coordinates to gl_Position
-          // they are used on the rasterization stage!
+        vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);
+        vec3 WorldNormal = NormalMatrix * normal;
+        vec3 N = normalize(WorldNormal);
+        NdotL = dot(N,L);
+        gl_Position = ProjectionMatrix * WorldCoord;
       }
   """
   fragment: """
       precision mediump float;
 
-      varying float NdotL;   // interpolated NdotL values (output of the vertex shader!)
+      varying float NdotL;
 
       uniform float LightIntensity;
       uniform float AmbientIntensity;
-      uniform vec3 DiffuseAndAmbientCoefficient;     // for RGB: this is why it's a 3D vector
+      uniform vec3 DiffuseAndAmbientCoefficient;
 
       void main() {
         gl_FragColor = vec4(
           (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity) *
           DiffuseAndAmbientCoefficient,
           1);
-        // note that some simplifying assumptions are made in the above formula
-        //  for example, k_a=k_d is used; also, specular term is not used; also, no attenuation here
       }
     """
+  uniforms:
+    LightIntensity               : [\1f 0.9]
+    AmbientIntensity             : [\1f 0.2]
+    DiffuseAndAmbientCoefficient : [\3f 1 1 1]
+
+    # OpenGL ES 2.0 doesn't support non-interpolating 'varying' variables in
+    # the shaders, so the only easy way to get flat shading is to not use
+    # a point light source.
+    L:
+      \3fv
+      vec3.normalize vec3.direction [-1,-1, 0] [0 0 5]
+
   init: !(gl, program) ->
     window.program = program
-    # bind lightsource information
-
-    @uniform1f do
-      @getUniformLocation program, \LightIntensity
-      0.9
-
-    @uniform1f do
-      @getUniformLocation program, \AmbientIntensity
-      0.2
-
-    @uniform3f do
-      @getUniformLocation program, \DiffuseAndAmbientCoefficient
-      1 1 1
-      # 0.7 0.7 0.7
-
-    @uniform3fv do
-      @getUniformLocation program, \L
-      flat-light-direction
 
 gouraud-program = shader-program gl,
   vertex: """
@@ -183,37 +169,25 @@ gouraud-program = shader-program gl,
 
       void main() {
         gl_FragColor = vec4(aColor, 1.0);
-        //  (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity) *
-         // DiffuseAndAmbientCoefficient,
-         // 1);
       }
     """
+  uniforms:
+    LightIntensity               : [\1f 0.5]
+    AmbientIntensity             : [\1f 0.5]
+    DiffuseAndAmbientCoefficient : [\3f 1 1 1]
+    LightLocation                : [\3f -1 -1 -10]
+
   init: !(gl, program) ->
     window.program = program
-    gl.uniform1f do
-      gl.getUniformLocation program, \LightIntensity
-      0.9
-
-    gl.uniform1f do
-      gl.getUniformLocation program, \AmbientIntensity
-      0.2
-
-    gl.uniform3f do
-      gl.getUniformLocation program, \DiffuseAndAmbientCoefficient
-      1 1 1
-      # 0.7 0.7 0.7
-
-    gl.uniform3fv do
-      gl.getUniformLocation program, \LightLocation
-      [-1 -1 -10]
 
 var donut-texture
 read \donut-texture, \AsBinaryString !->
   donut-texture := read-ppm gl, it
 
-  do setup-buffers
-  do reset-stage
-  do draw
+  if current-program is \donut
+    do setup-buffers
+    do reset-stage
+    do draw
 
 donut-program = shader-program gl,
   vertex: """
@@ -269,24 +243,19 @@ donut-program = shader-program gl,
         gl_FragColor = vec4(intensity * texture2D(texture, tex).xyz, 1.0);
       }
   """
+  uniforms:
+    LightIntensity   : [\1f 0.5]
+    AmbientIntensity : [\1f 0.5]
+    LightLocation    : [\3f -1 -1 -10]
+
   init: !(gl, program) ->
     window.program = program
-    gl.uniform1f do
-      gl.getUniformLocation program, \LightIntensity
-      0.5
-
-    gl.uniform1f do
-      gl.getUniformLocation program, \AmbientIntensity
-      0.5
-
-    gl.uniform3fv do
-      gl.getUniformLocation program, \LightLocation
-      [-1 -1 -10]
 
 var triangles, vertices
 var vertices-buffer, normals-buffer, triangles-buffer
 staging = mat4.identity!
-var distance, rotation, current-rot
+var distance, rotation
+current-rot = mat4.identity!
 var gouraud, coords, flat
 
 calculate-normals-and-flats = !->
@@ -330,7 +299,6 @@ calculate-normals-and-flats = !->
   j = 0
   gouraud := new Float32Array triangles.length * 3
 
-
   for i from 0 til triangles.length by 3
     a = triangles[i    ] * 3
     b = triangles[i + 1] * 3
@@ -369,7 +337,7 @@ calculate-normals-and-flats = !->
   mat4.scale staging, to-stage
   mat4.translate staging, to-center
 
-current-program = \donut
+current-program = \reg
 [thetas, phis] = do make-donut
 var theta-buffer, phi-buffer
 
@@ -448,6 +416,7 @@ reset-stage = !->
 export draw = !->
   gl.clear COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT
 
+  if current-rot!? then current-rot := mat4.identity! # XXX weird bug
   rot = mat4.multiply current-rot, rotation, mat4.create!
 
   gl.uniformMatrix4fv do
