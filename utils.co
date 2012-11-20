@@ -28,7 +28,7 @@ export flatten3d = (gl, pixels, width, height, depth) ->
   tex = gl.createTexture!
   gl.bindTexture gl.TEXTURE_2D, tex
   gl.texImage2D gl.TEXTURE_2D, 0, gl.RGB, 1, 1, 0, gl.RGB, gl.UNSIGNED_BYTE, data
-  gl.texParameteri 
+  gl.texParameteri
 
 # the texture from a ppm image file
 export read-ppm = (gl, it) ->
@@ -44,25 +44,27 @@ const
   RADS   = CIRCLE / RES
 
 # generates a torus model
-# returns [triangles, vertices]
-export make-donut = (inner-radius, outer-radius) ->
-  triangles = new Uint16Array RES * RES # XXX
-  vertices = new Float32Array RES * RES * 3
+# returns an array of [[theta, phi]] pairs, in TRIANGLE order, but flattened
+export make-donut = ->
+  params = new Float32Array RES * RES * 2 * 3
   i = 0
-  for phi til CIRCLE by RADS
-    for theta til CIRCLE by RADS
-      vertices[i++] = 
-      vertices[i++] = 
-      vertices[i++] = 
+  # for every point, add the two triangles in order
+  for theta til CIRCLE by RADS
+    for phi til CIRCLE by RADS
+      #     3--1  .
+      #      \ |
+      #       \|
+      #     . 2,4 .
+      #        |\
+      #        | \
+      #     .  6--5
+      params[i++] = theta; params[i++] = phi
+      params[i++] = theta; params[i++] = phi + RADS
+      params[i++] = theta + RADS; params[i++] = phi
 
-  for i til RES * RES
-    triangles[i] =
-
-
-
-  return
-    triangles
-    vertices
+      params[i++] = theta; params[i++] = phi + RADS
+      params[i++] = theta - RADS; params[i++] = phi
+      params[i++] = theta; params[i++] = phi + RADS + RADS
 
 # convert a sphere map to a cube map, which webGL can handle natively
 # returns the cube map
