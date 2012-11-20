@@ -84,9 +84,8 @@ gl
 # so the only easy way to get flat shading is to not use a point light source.
 flat-light-direction = vec3.normalize vec3.direction [-1,-1, 0] [0 0 5]
 
-flat-program = !-> with gl
-  vertex-shader = @createShader VERTEX_SHADER
-    @shaderSource (&), """
+flat-program = shader-program gl,
+  vertex: """
       attribute vec3 coord;
       attribute vec3 normal;
 
@@ -106,13 +105,8 @@ flat-program = !-> with gl
           // a correctly written vertex shader should write screen space coordinates to gl_Position
           // they are used on the rasterization stage!
       }
-    """
-    @compileShader (&)
-    unless @getShaderParameter (&), COMPILE_STATUS
-      throw new Error "couldn't compile vertex shader!"
-
-  fragment-shader = @createShader FRAGMENT_SHADER
-    @shaderSource (&), """
+  """
+  fragment: """
       precision mediump float;
 
       varying float NdotL;   // interpolated NdotL values (output of the vertex shader!)
@@ -130,40 +124,28 @@ flat-program = !-> with gl
         //  for example, k_a=k_d is used; also, specular term is not used; also, no attenuation here
       }
     """
-    @compileShader(&)
-    unless @getShaderParameter (&), COMPILE_STATUS
-      throw new Error "couldn't compile fragment shader!"
+  init: !(gl, program) ->
+    # bind lightsource information
 
-  window.program = @createProgram!
-    @attachShader (&), vertex-shader
-    @attachShader (&), fragment-shader
-    @linkProgram (&)
-    unless @getProgramParameter (&), LINK_STATUS
-      throw new Error "couldn't intialize shader program!"
-    @useProgram (&)
+    @uniform1f do
+      @getUniformLocation program, \LightIntensity
+      0.9
 
-  # bind lightsource information
+    @uniform1f do
+      @getUniformLocation program, \AmbientIntensity
+      0.2
 
-  @uniform1f do
-    @getUniformLocation program, \LightIntensity
-    0.9
+    @uniform3f do
+      @getUniformLocation program, \DiffuseAndAmbientCoefficient
+      1 1 1
+      # 0.7 0.7 0.7
 
-  @uniform1f do
-    @getUniformLocation program, \AmbientIntensity
-    0.2
+    @uniform3fv do
+      @getUniformLocation program, \L
+      flat-light-direction
 
-  @uniform3f do
-    @getUniformLocation program, \DiffuseAndAmbientCoefficient
-    1 1 1
-    # 0.7 0.7 0.7
-
-  @uniform3fv do
-    @getUniformLocation program, \L
-    flat-light-direction
-
-gouraud-program = !-> with gl
-  vertex-shader = @createShader VERTEX_SHADER
-    @shaderSource (&), """
+gouraud-program = shader-program gl,
+  vertex: """
       precision mediump float;
 
       attribute vec3 coord;
@@ -193,12 +175,7 @@ gouraud-program = !-> with gl
         gl_Position = ProjectionMatrix * WorldCoord;
       }
     """
-    @compileShader (&)
-    unless @getShaderParameter (&), COMPILE_STATUS
-      throw new Error "couldn't compile vertex shader!\n#{@getShaderInfoLog(&)}"
-
-  fragment-shader = @createShader FRAGMENT_SHADER
-    @shaderSource (&), """
+  fragment: """
       precision mediump float;
 
       varying vec3 aColor;
@@ -210,36 +187,23 @@ gouraud-program = !-> with gl
          // 1);
       }
     """
-    @compileShader(&)
-    unless @getShaderParameter (&), COMPILE_STATUS
-      throw new Error "couldn't compile fragment shader!\n#{@getShaderInfoLog(&)}"
+  init: !(gl, program) ->
+    gl.uniform1f do
+      gl.getUniformLocation program, \LightIntensity
+      0.9
 
-  window.program = @createProgram!
-    @attachShader (&), vertex-shader
-    @attachShader (&), fragment-shader
-    @linkProgram (&)
-    unless @getProgramParameter (&), LINK_STATUS
-      throw new Error "couldn't intialize shader program!"
-    @useProgram (&)
+    gl.uniform1f do
+      gl.getUniformLocation program, \AmbientIntensity
+      0.2
 
-  # bind lightsource information
+    gl.uniform3f do
+      gl.getUniformLocation program, \DiffuseAndAmbientCoefficient
+      1 1 1
+      # 0.7 0.7 0.7
 
-  @uniform1f do
-    @getUniformLocation program, \LightIntensity
-    0.9
-
-  @uniform1f do
-    @getUniformLocation program, \AmbientIntensity
-    0.2
-
-  @uniform3f do
-    @getUniformLocation program, \DiffuseAndAmbientCoefficient
-    1 1 1
-    # 0.7 0.7 0.7
-
-  @uniform3fv do
-    @getUniformLocation program, \LightLocation
-    [-1 -1 -10]
+    gl.uniform3fv do
+      gl.getUniformLocation program, \LightLocation
+      [-1 -1 -10]
 
 var triangles, vertices
 var vertices-buffer, normals-buffer, triangles-buffer

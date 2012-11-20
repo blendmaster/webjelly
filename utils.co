@@ -71,3 +71,29 @@ export make-donut = ->
 export sphere-to-cube = (gl, sphere) ->
   return stuff
 
+# from vertex and fragment glsl source, a function that attaches the program
+# and runs initialization code provided
+export shader-program = (gl, {vertex, fragment, init}) ->
+  vertex-shader = gl.createShader gl.VERTEX_SHADER
+    gl.shaderSource (&), vertex
+    gl.compileShader (&)
+    unless gl.getShaderParameter (&), COMPILE_STATUS
+      throw new Error "couldn't compile vertex shader!\n#{@getShaderInfoLog(&)}"
+
+  fragment-shader = gl.createShader gl.FRAGMENT_SHADER
+    gl.shaderSource (&), fragment
+    gl.compileShader (&)
+    unless gl.getShaderParameter (&), COMPILE_STATUS
+      throw new Error "couldn't compile fragment shader!\n#{@getShaderInfoLog(&)}"
+
+  program = gl.createProgram!
+    gl.attachShader (&), vertex-shader
+    gl.attachShader (&), fragment-shader
+    gl.linkProgram (&)
+    unless gl.getProgramParameter (&), LINK_STATUS
+      throw new Error "couldn't intialize shader program!"
+
+  !->
+    gl.useProgram program
+    init gl, program
+
