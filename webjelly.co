@@ -122,9 +122,12 @@ calculate-normals-and-flats = !->
     b = triangles[i + 1] * 3
     c = triangles[i + 2] * 3
 
-    gouraud[j    , j + 1, j + 2] = slice.call vert-norms, a, 3 + a
-    gouraud[j + 3, j + 4, j + 5] = slice.call vert-norms, b, 3 + b
-    gouraud[j + 6, j + 7, j + 8] = slice.call vert-norms, c, 3 + c
+    # XXX why do these normals have to be backwards (compared to flat normals)
+    # to render correctly? There must be something wrong with my shader code or
+    # this normal-generating code, but I can't figure it out.
+    gouraud[j    , j + 1, j + 2] -= slice.call vert-norms, a, 3 + a
+    gouraud[j + 3, j + 4, j + 5] -= slice.call vert-norms, b, 3 + b
+    gouraud[j + 6, j + 7, j + 8] -= slice.call vert-norms, c, 3 + c
     j += 9
 
   # find coordinate bounds

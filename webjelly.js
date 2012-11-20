@@ -98,9 +98,9 @@ original commented source there. */
       a = triangles[i] * 3;
       b = triangles[i + 1] * 3;
       c = triangles[i + 2] * 3;
-      ref$ = slice.call(vertNorms, a, 3 + a), gouraud[j] = ref$[0], gouraud[j + 1] = ref$[1], gouraud[j + 2] = ref$[2];
-      ref$ = slice.call(vertNorms, b, 3 + b), gouraud[j + 3] = ref$[0], gouraud[j + 4] = ref$[1], gouraud[j + 5] = ref$[2];
-      ref$ = slice.call(vertNorms, c, 3 + c), gouraud[j + 6] = ref$[0], gouraud[j + 7] = ref$[1], gouraud[j + 8] = ref$[2];
+      ref$ = slice.call(vertNorms, a, 3 + a), gouraud[j] -= ref$[0], gouraud[j + 1] -= ref$[1], gouraud[j + 2] -= ref$[2];
+      ref$ = slice.call(vertNorms, b, 3 + b), gouraud[j + 3] -= ref$[0], gouraud[j + 4] -= ref$[1], gouraud[j + 5] -= ref$[2];
+      ref$ = slice.call(vertNorms, c, 3 + c), gouraud[j + 6] -= ref$[0], gouraud[j + 7] -= ref$[1], gouraud[j + 8] -= ref$[2];
       j += 9;
     }
     minx = miny = minz = Infinity;
