@@ -124,7 +124,6 @@ programs.donut = shader-program do
 
     uniform float LightIntensity;
     uniform float AmbientIntensity;
-    uniform vec3 DiffuseAndAmbientCoefficient;
 
     void main() {
       vec3 coord = vec3( (0.75 + 0.25 * cos(phi)) * cos(theta)
@@ -178,9 +177,8 @@ programs.environment = shader-program do
     uniform mat3 NormalMatrix;
     uniform vec3 LightLocation;
 
-    uniform float LightIntensity;
-    uniform float AmbientIntensity;
-    uniform vec3 DiffuseAndAmbientCoefficient;
+    //uniform float LightIntensity;
+    //uniform float AmbientIntensity;
 
     void main() {
       vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);
@@ -213,3 +211,58 @@ programs.environment = shader-program do
     #LightIntensity               : [\1f 0.8]
     #AmbientIntensity             : [\1f 0.2]
     #LightLocation                : [\3f -10 -10 10]
+
+programs.threedee = shader-program do
+  vertex: """
+    precision mediump float;
+
+    attribute vec3 coord;
+    attribute vec3 normal;
+
+    varying vec3 box; // coords [0-1] in all axes
+    varying float intensity;
+
+    uniform mat4 ModelViewMatrix;
+    uniform mat4 ProjectionMatrix;
+    uniform mat3 NormalMatrix;
+    uniform vec3 LightLocation;
+    uniform mat4 TextureSpaceMatrix;
+
+    uniform float LightIntensity;
+    uniform float AmbientIntensity;
+
+    void main() {
+      vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);
+      vec3 L = normalize(LightLocation - WorldCoord.xyz);
+      vec3 WorldNormal = NormalMatrix * normal;
+      vec3 N = normalize(WorldNormal);
+      float NdotL = dot(N,L);
+      intensity =
+        (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity);
+
+      box = vec3(TextureSpaceMatrix * vec4(coord, 1.0));
+
+      gl_Position = ProjectionMatrix * WorldCoord;
+    }"""
+  fragment: """
+    precision mediump float;
+
+    varying float intensity;
+    varying vec3 box; // 0 - 1 in all axes
+
+    // actually 3D, so need special indexing
+    // 2048 x 1024
+    uniform sampler2D texture;
+
+    void main() {
+      // indistinguishable from magic
+      vec2 idx = vec2( (floor((floor(box.y * 8.0) - box.y * 8.0) * 16.0) * 128.0 + 128.0 * box.z) / 2048.0
+                     , (floor(128.0 * box.x) * 8.0 + box.y * 8.0) / 1024.0
+                     );
+      gl_FragColor = vec4(intensity * texture2D(texture, idx).xyz, 1.0);
+    }"""
+  uniforms:
+    LightIntensity               : [\1f 0.8]
+    AmbientIntensity             : [\1f 0.2]
+    LightLocation                : [\3f -10 -10 10]
+

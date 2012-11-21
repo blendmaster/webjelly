@@ -150,6 +150,14 @@ calculate-normals-and-flats = !->
   mat4.translate staging, to-center
   model.staging = staging
 
+  # transform to texture coordinates, used for 3d texture
+  text-coords = mat4.identity!
+  mat4.scale text-coords, [0.5 0.5 0.5] # to [0,1]
+  mat4.translate text-coords, [1 1 1] # to [0-2] in each coord
+  mat4.scale text-coords, to-stage
+  mat4.translate text-coords, to-center
+  model.text-coords = text-coords
+
 function is-ready
      (mode is \donut and textures.donut?) \
   or (    model.loaded \
@@ -183,6 +191,13 @@ setup-buffers = !->
       gl.activeTexture gl.TEXTURE0
       gl.bindTexture gl.TEXTURE_2D, textures.environment
       uniform gl, \texture \1i 0
+    else if mode is \threedee
+      # not actually 3d :(
+      gl.activeTexture gl.TEXTURE0
+      gl.bindTexture gl.TEXTURE_2D, textures.threedee
+      uniform gl, \texture \1i 0
+
+      uniform gl, \TextureSpaceMatrix \Matrix4fv model.text-coords
 
 export draw = !->
   return unless is-ready!
@@ -191,6 +206,7 @@ export draw = !->
 
   if current-rot!? then current-rot := mat4.identity! # XXX weird bug
   rot = mat4.multiply current-rot, rotation, mat4.create!
+
   uniform gl, \NormalMatrix \Matrix3fv mat4.toMat3 rot
 
   uniform gl, \ProjectionMatrix \Matrix4fv \
@@ -231,16 +247,25 @@ reading \env-texture \AsBinaryString !->
   # switch mode
   if initial-mode is \environment then $ \environment .click!
 
+reading \threedee-texture \AsArrayBuffer !->
+  textures.threedee = flatten3d gl, it
+
+  reset-stage!
+
+  $ \threedee .disabled = false
+  # switch mode
+  if initial-mode is \threedee then $ \threedee .click!
+
 reading \file \AsText !->
   tokens = it.split /\s+/ .map parseFloat
   [num-triangles, num-vertices] = tokens.splice 0, 2
 
-  model.triangles := new Uint16Array  tokens.splice 0 num-triangles * 3
-  model.vertices  := new Float32Array tokens.splice 0 num-vertices  * 3
+  model.triangles = new Uint16Array  tokens.splice 0 num-triangles * 3
+  model.vertices  = new Float32Array tokens.splice 0 num-vertices  * 3
 
-  model.loaded = true
   reset-stage!
   calculate-normals-and-flats!
+  model.loaded = true
 
   $ \flat    .disabled = false
   $ \gouraud .disabled = false

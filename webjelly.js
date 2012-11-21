@@ -66,7 +66,7 @@ original commented source there. */
     (fn$.call(this, $(prog), prog));
   }
   calculateNormalsAndFlats = function(){
-    var slice, triangles, vertices, vertNorms, coords, flat, j, i, to$, a, b, c, v0, v1, v2, cross, gouraud, ref$, minz, miny, minx, maxz, maxy, maxx, x$, toCenter, _, toStage, staging;
+    var slice, triangles, vertices, vertNorms, coords, flat, j, i, to$, a, b, c, v0, v1, v2, cross, gouraud, ref$, minz, miny, minx, maxz, maxy, maxx, x$, toCenter, _, toStage, staging, textCoords;
     slice = Array.prototype.slice;
     triangles = model.triangles, vertices = model.vertices;
     vertNorms = new Float32Array(vertices.length);
@@ -122,6 +122,12 @@ original commented source there. */
     mat4.scale(staging, toStage);
     mat4.translate(staging, toCenter);
     model.staging = staging;
+    textCoords = mat4.identity();
+    mat4.scale(textCoords, [0.5, 0.5, 0.5]);
+    mat4.translate(textCoords, [1, 1, 1]);
+    mat4.scale(textCoords, toStage);
+    mat4.translate(textCoords, toCenter);
+    model.textCoords = textCoords;
   };
   function isReady(){
     return (mode === 'donut' && textures.donut != null) || (model.loaded && ((mode === 'environment' && textures.environment != null) || (mode === 'threedee' && textures.threedee != null) || mode === 'flat' || mode === 'gouraud'));
@@ -143,6 +149,11 @@ original commented source there. */
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, textures.environment);
         uniform(gl, 'texture', '1i', 0);
+      } else if (mode === 'threedee') {
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, textures.threedee);
+        uniform(gl, 'texture', '1i', 0);
+        uniform(gl, 'TextureSpaceMatrix', 'Matrix4fv', model.textCoords);
       }
     }
   };
@@ -190,15 +201,23 @@ original commented source there. */
       $('environment').click();
     }
   });
+  reading('threedee-texture', 'AsArrayBuffer', function(it){
+    textures.threedee = flatten3d(gl, it);
+    resetStage();
+    $('threedee').disabled = false;
+    if (initialMode === 'threedee') {
+      $('threedee').click();
+    }
+  });
   reading('file', 'AsText', function(it){
     var tokens, ref$, numTriangles, numVertices;
     tokens = it.split(/\s+/).map(parseFloat);
     ref$ = tokens.splice(0, 2), numTriangles = ref$[0], numVertices = ref$[1];
     model.triangles = new Uint16Array(tokens.splice(0, numTriangles * 3));
     model.vertices = new Float32Array(tokens.splice(0, numVertices * 3));
-    model.loaded = true;
     resetStage();
     calculateNormalsAndFlats();
+    model.loaded = true;
     $('flat').disabled = false;
     $('gouraud').disabled = false;
     if (initialMode !== 'donut') {

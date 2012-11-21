@@ -2,7 +2,7 @@
 original commented source there. */
 (function(){
   "use strict";
-  var log, degrees, radians, $, flatten3d, readPpm, RES, CIRCLE, RADS, makeDonut, sphereToCube, shaderProgram, defer, reading, uniform, bindBuffer, out$ = typeof exports != 'undefined' && exports || this, slice$ = [].slice;
+  var log, degrees, radians, $, flatten3d, readPpm, RES, CIRCLE, RADS, makeDonut, shaderProgram, defer, reading, uniform, bindBuffer, out$ = typeof exports != 'undefined' && exports || this, slice$ = [].slice;
   mat4.translation = function(translation){
     return mat4.translate(mat4.identity(), translation);
   };
@@ -19,20 +19,25 @@ original commented source there. */
   out$.$ = $ = function(it){
     return document.getElementById(it);
   };
-  out$.flatten3d = flatten3d = function(gl, pixels, width, height, depth){
+  out$.flatten3d = flatten3d = function(gl, pixels){
     var data, tex;
-    if (width * height * depth > 2048 * 2048) {
-      throw new Error("That 3d texture is too big ;_;");
-    }
     data = new Uint8Array(pixels);
     tex = gl.createTexture();
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 1, 1, 0, gl.RGB, gl.UNSIGNED_BYTE, data);
-    return gl.texParameteri;
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 2048, 1024, 0, gl.RGB, gl.UNSIGNED_BYTE, data);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    return tex;
   };
   out$.readPpm = readPpm = function(gl, it){
-    var ref$, width, height, pixels, data, i, to$, tex;
-    ref$ = it.match(/P6\n(\d+) (\d+)\n255\n([\s\S]+)/), width = ref$[1], height = ref$[2], pixels = ref$[3];
+    var ref$, width, height, pixels, e, data, i, to$, tex;
+    try {
+      ref$ = it.match(/P6\n(\d+) (\d+)\n255\n([\s\S]+)/), width = ref$[1], height = ref$[2], pixels = ref$[3];
+    } catch (e$) {
+      e = e$;
+      throw Error("not a valid binary ppm!");
+    }
     width = parseInt(width, 10);
     height = parseInt(height, 10);
     data = new Uint8Array(width * height * 3);
@@ -76,9 +81,6 @@ original commented source there. */
       thetas: thetas,
       phis: phis
     };
-  };
-  out$.sphereToCube = sphereToCube = function(gl, sphere){
-    return stuff;
   };
   out$.shaderProgram = shaderProgram = function(arg$){
     var vertex, fragment, ref$, uniforms;
