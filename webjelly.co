@@ -12,250 +12,81 @@ canvas = document.getElementById \canvas
 {width, height} = canvas
 
 try
-  window.gl = WebGLDebugUtils.makeDebugContext do
+  window.gl =
     canvas.getContext \webgl or canvas.getContext \experimental-webgl
 
 if gl!?
-  alert "Sorry, it looks like your browser doesn't support WebGL, or webGL is
+  alert "Sorry, it looks like your browser doesn't support WebGL, or webGL is \
     disabled!"
   throw new Error "no webgl ;_;"
 
+window.gl = WebGLDebugUtils.makeDebugContext gl
+
 # I don't like typing in gl all the time, so I will attach CONSTANTS to the
 # global context. Don't do this at home, kids.
-for k, v in gl
-  window[k] = v if /^[A-Z_]+$/.test k
+for k, v in gl => window[k] = v if /^[A-Z_]+$/.test k
 
-# grab control state and setup listeners
-var shading
-
-$ \flat
-  if &checked
-    shading = \flat
-  &addEventListener \click !->
-    shading := \flat
-    do flat-program
-    do setup-buffers
-    do draw
-
-$ \gouraud
-  if &checked
-    shading = \gouraud
-  &addEventListener \click !->
-    shading := \gouraud
-    do gouraud-program
-    do setup-buffers
-    do draw
-
-# swap culling
-$ \front
-  if &checked
-    gl.cullFace FRONT
-  &addEventListener \click !->
-    gl.cullFace FRONT
-    do draw
-$ \back
-  if &checked
-    gl.cullFace BACK
-  &addEventListener \click !->
-    gl.cullFace BACK
-    do draw
-
-# zooming
-var fov
-$ \zoom-in .addEventListener \click !->
-  --fov
-  do draw
-$ \zoom-out .addEventListener \click !->
-  ++fov
-  do draw
-
-# set up
 gl
   &viewport   0 0 width, height
-
-  &enable    DEPTH_TEST
-
+  &enable     DEPTH_TEST
   &enable     CULL_FACE
-
   &clearColor 0 0 0 1 # black
   &clear      COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT
 
-# OpenGL ES 2.0 doesn't support non-interpolating 'varying' variables in the shaders,
-# so the only easy way to get flat shading is to not use a point light source.
-flat-light-direction = vec3.normalize vec3.direction [-1,-1, 0] [0 0 5]
+# swap culling
+$ \front
+  if &checked then gl.cullFace FRONT
+  &addEventListener \click !-> gl.cullFace FRONT; draw!
+$ \back
+  if &checked then gl.cullFace BACK
+  &addEventListener \click !-> gl.cullFace BACK; draw!
 
-flat-program = !-> with gl
-  vertex-shader = @createShader VERTEX_SHADER
-    @shaderSource (&), """
-      attribute vec3 coord;
-      attribute vec3 normal;
+var rotation, current-rot, fov, distance
 
-      varying float NdotL;
+!function reset-stage
+  rotation := mat4.identity!
+  current-rot := mat4.identity!
+  fov := 15deg
+  distance := 1 / Math.tan(radians(fov) / 2)
 
-      uniform mat4 ModelViewMatrix;
-      uniform mat4 ProjectionMatrix;
-      uniform mat3 NormalMatrix;
-      uniform vec3 L;
+reset-stage!
 
-      void main() {
-        vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);   // convert to world coordinates
-        vec3 WorldNormal = NormalMatrix * normal;                // normal in world coordinates
-        vec3 N = normalize(WorldNormal);                       // N vector for illumination
-        NdotL = dot(N,L);                                      // part of diffuse term (multiplied by k_d's etc in the fragment shader)
-        gl_Position = ProjectionMatrix * WorldCoord;             // gl_Position is a predefined variable
-          // a correctly written vertex shader should write screen space coordinates to gl_Position
-          // they are used on the rasterization stage!
-      }
-    """
-    @compileShader (&)
-    unless @getShaderParameter (&), COMPILE_STATUS
-      throw new Error "couldn't compile vertex shader!"
+$ \zoom-in  .addEventListener \click !-> --fov; draw!
+$ \zoom-out .addEventListener \click !-> ++fov; draw!
 
-  fragment-shader = @createShader FRAGMENT_SHADER
-    @shaderSource (&), """
-      precision mediump float;
+# global state
+var mode
+model = {loaded: false}
+buffers = {}
+textures = {}
 
-      varying float NdotL;   // interpolated NdotL values (output of the vertex shader!)
+# donut generation
+{thetas, phis} = make-donut!
 
-      uniform float LightIntensity;
-      uniform float AmbientIntensity;
-      uniform vec3 DiffuseAndAmbientCoefficient;     // for RGB: this is why it's a 3D vector
+for prog of <[flat gouraud environment threedee donut]>
+  let el = $ prog
+    if el.checked
+      mode := prog
+      load prog, gl
 
-      void main() {
-        gl_FragColor = vec4(
-          (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity) *
-          DiffuseAndAmbientCoefficient,
-          1);
-        // note that some simplifying assumptions are made in the above formula
-        //  for example, k_a=k_d is used; also, specular term is not used; also, no attenuation here
-      }
-    """
-    @compileShader(&)
-    unless @getShaderParameter (&), COMPILE_STATUS
-      throw new Error "couldn't compile fragment shader!"
+    el.addEventListener \click !->
+      return if @disabled
+      mode := prog
+      load prog, gl
 
-  window.program = @createProgram!
-    @attachShader (&), vertex-shader
-    @attachShader (&), fragment-shader
-    @linkProgram (&)
-    unless @getProgramParameter (&), LINK_STATUS
-      throw new Error "couldn't intialize shader program!"
-    @useProgram (&)
-
-  # bind lightsource information
-
-  @uniform1f do
-    @getUniformLocation program, \LightIntensity
-    0.9
-
-  @uniform1f do
-    @getUniformLocation program, \AmbientIntensity
-    0.2
-
-  @uniform3f do
-    @getUniformLocation program, \DiffuseAndAmbientCoefficient
-    1 1 1
-    # 0.7 0.7 0.7
-
-  @uniform3fv do
-    @getUniformLocation program, \L
-    flat-light-direction
-
-gouraud-program = !-> with gl
-  vertex-shader = @createShader VERTEX_SHADER
-    @shaderSource (&), """
-      precision mediump float;
-
-      attribute vec3 coord;
-      attribute vec3 normal;
-
-      varying vec3 aColor;
-
-      uniform mat4 ModelViewMatrix;
-      uniform mat4 ProjectionMatrix;
-      uniform mat3 NormalMatrix;
-      uniform vec3 LightLocation;
-
-      uniform float LightIntensity;
-      uniform float AmbientIntensity;
-      uniform vec3 DiffuseAndAmbientCoefficient;
-
-      void main() {
-        vec4 WorldCoord = ModelViewMatrix * vec4(coord,1.0);
-        vec3 L = normalize(LightLocation - WorldCoord.xyz);
-        vec3 WorldNormal = NormalMatrix * normal;
-        vec3 N = normalize(WorldNormal);
-        float NdotL = dot(N,L);
-        aColor =
-          ((LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity) *
-          DiffuseAndAmbientCoefficient);
-
-        gl_Position = ProjectionMatrix * WorldCoord;
-      }
-    """
-    @compileShader (&)
-    unless @getShaderParameter (&), COMPILE_STATUS
-      throw new Error "couldn't compile vertex shader!\n#{@getShaderInfoLog(&)}"
-
-  fragment-shader = @createShader FRAGMENT_SHADER
-    @shaderSource (&), """
-      precision mediump float;
-
-      varying vec3 aColor;
-
-      void main() {
-        gl_FragColor = vec4(aColor, 1.0);
-        //  (LightIntensity * (NdotL > 0.0 ? NdotL : 0.0) + AmbientIntensity) *
-         // DiffuseAndAmbientCoefficient,
-         // 1);
-      }
-    """
-    @compileShader(&)
-    unless @getShaderParameter (&), COMPILE_STATUS
-      throw new Error "couldn't compile fragment shader!\n#{@getShaderInfoLog(&)}"
-
-  window.program = @createProgram!
-    @attachShader (&), vertex-shader
-    @attachShader (&), fragment-shader
-    @linkProgram (&)
-    unless @getProgramParameter (&), LINK_STATUS
-      throw new Error "couldn't intialize shader program!"
-    @useProgram (&)
-
-  # bind lightsource information
-
-  @uniform1f do
-    @getUniformLocation program, \LightIntensity
-    0.9
-
-  @uniform1f do
-    @getUniformLocation program, \AmbientIntensity
-    0.2
-
-  @uniform3f do
-    @getUniformLocation program, \DiffuseAndAmbientCoefficient
-    1 1 1
-    # 0.7 0.7 0.7
-
-  @uniform3fv do
-    @getUniformLocation program, \LightLocation
-    [-1 -1 -10]
-
-var triangles, vertices
-var vertices-buffer, normals-buffer, triangles-buffer
-var staging
-var distance, rotation, current-rot
-var gouraud, coords, flat
+      setup-buffers!
+      draw!
 
 calculate-normals-and-flats = !->
   slice = Array::slice
+  {triangles, vertices} = model
 
   vert-norms = new Float32Array vertices.length
 
   # coord, with no duplicates
-  coords := new Float32Array triangles.length * 3
+  model.coords = coords = new Float32Array triangles.length * 3
 
-  flat := new Float32Array triangles.length * 3
+  model.flat = flat = new Float32Array triangles.length * 3
   j = 0
 
   for i from 0 til triangles.length by 3
@@ -286,35 +117,28 @@ calculate-normals-and-flats = !->
 
   # fill gouraud normals in coords order
   j = 0
-  gouraud := new Float32Array triangles.length * 3
-
+  model.gouraud = gouraud = new Float32Array triangles.length * 3
 
   for i from 0 til triangles.length by 3
     a = triangles[i    ] * 3
     b = triangles[i + 1] * 3
     c = triangles[i + 2] * 3
 
-    gouraud[j    , j + 1, j + 2] = slice.call vert-norms, a, 3 + a
-    gouraud[j + 3, j + 4, j + 5] = slice.call vert-norms, b, 3 + b
-    gouraud[j + 6, j + 7, j + 8] = slice.call vert-norms, c, 3 + c
+    # XXX why do these normals have to be backwards (compared to flat normals)
+    # to render correctly? There must be something wrong with my shader code or
+    # this normal-generating code, but I can't figure it out.
+    gouraud[j    , j + 1, j + 2] -= slice.call vert-norms, a, 3 + a
+    gouraud[j + 3, j + 4, j + 5] -= slice.call vert-norms, b, 3 + b
+    gouraud[j + 6, j + 7, j + 8] -= slice.call vert-norms, c, 3 + c
     j += 9
 
   # find coordinate bounds
   minx = miny = minz = Infinity
   maxx = maxy = maxz = 0
   for i from 0 til vertices.length by 3
-    vertices[i]
-      minx <?= &
-      maxx >?= &
-    vertices[i + 1]
-      miny <?= &
-      maxy >?= &
-    vertices[i + 2]
-      minz <?= &
-      maxz >?= &
-
-  #log "min: #minx #miny #minz"
-  #log "max: #maxx #maxy #maxz"
+    vertices[i    ] => minx <?= &; maxx >?= &
+    vertices[i + 1] => miny <?= &; maxy >?= &
+    vertices[i + 2] => minz <?= &; maxz >?= &
 
   # transforms to center stage
   to-center = -[(minx + maxx) / 2, (miny + maxy) / 2, (minz + maxz) / 2]
@@ -323,113 +147,141 @@ calculate-normals-and-flats = !->
     |> 2 / _
     |> [_, _, _]
 
-  staging := mat4.identity!
+  staging = mat4.identity!
   mat4.scale staging, to-stage
   mat4.translate staging, to-center
+  model.staging = staging
+
+  # transform to texture coordinates, used for 3d texture
+  text-coords = mat4.identity!
+  mat4.scale text-coords, [0.5 0.5 0.5] # to [0,1]
+  mat4.translate text-coords, [1 1 1] # to [0-2] in each coord
+  mat4.scale text-coords, to-stage
+  mat4.translate text-coords, to-center
+  model.text-coords = text-coords
+
+function is-ready
+     (mode is \donut and textures.donut?) \
+  or (    model.loaded \
+      and (   (mode is \environment and textures.environment?) \
+           or (mode is \threedee    and textures.threedee?) \
+           or  mode is \flat \
+           or  mode is \gouraud))
 
 # draw the model from the input file of triangles and vertices
 setup-buffers = !->
-  # vertices
-  vertices-buffer := gl.createBuffer!
-    gl.bindBuffer ARRAY_BUFFER, (&)
-    gl.bufferData do
-      ARRAY_BUFFER
-      coords
-      STATIC_DRAW
+  return unless is-ready!
 
-    # bind to varying coordiantes
-    gl.getAttribLocation program, \coord
-      gl.enableVertexAttribArray (&)
-      gl.vertexAttribPointer (&), 3, FLOAT, false 0 0
+  if mode is \donut
+    gl.activeTexture gl.TEXTURE0
+    gl.bindTexture gl.TEXTURE_2D, textures.donut
+    uniform gl, \texture \1i 0
 
-  # normals
-  normals-buffer := gl.createBuffer!
-    gl.bindBuffer ARRAY_BUFFER, (&)
-    gl.bufferData do
-      ARRAY_BUFFER
-      if shading is \flat then flat else gouraud
-      STATIC_DRAW
+    buffers <<<
+      theta : bind-buffer gl, \theta, thetas, 1
+      phi   : bind-buffer gl, \phi  , phis  , 1
+  else
+    buffers <<<
+      vertices: bind-buffer gl, \coord , model.coords, 3
+      normals : bind-buffer do
+        gl
+        \normal
+        model[if mode is \flat then \flat else \gouraud]
+        3
 
-    # bind to unvarying normal
-    gl.getAttribLocation program, \normal
-      gl.enableVertexAttribArray (&)
-      gl.vertexAttribPointer (&), 3, FLOAT, false 0 0
+    if mode is \environment
+      gl.activeTexture gl.TEXTURE0
+      gl.bindTexture gl.TEXTURE_2D, textures.environment
+      uniform gl, \texture \1i 0
+    else if mode is \threedee
+      # not actually 3d :(
+      gl.activeTexture gl.TEXTURE0
+      gl.bindTexture gl.TEXTURE_2D, textures.threedee
+      uniform gl, \texture \1i 0
 
-  #triangles-buffer := gl.createBuffer!
-    #gl.bindBuffer ELEMENT_ARRAY_BUFFER, (&)
-    #gl.bufferData ELEMENT_ARRAY_BUFFER, triangles, STATIC_DRAW
-
-reset-stage = !->
-  rotation := mat4.identity!
-  current-rot := mat4.identity!
-  fov := 15deg
-  distance := 1 / Math.tan(radians(fov) / 2)
+      uniform gl, \TextureSpaceMatrix \Matrix4fv model.text-coords
 
 export draw = !->
+  return unless is-ready!
+
   gl.clear COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT
 
+  if current-rot!? then current-rot := mat4.identity! # XXX weird bug
   rot = mat4.multiply current-rot, rotation, mat4.create!
 
-  gl.uniformMatrix4fv do
-    gl.getUniformLocation program, \ProjectionMatrix
-    false
-    mat4.perspective fov, width / height, distance - 1, distance + 3
+  uniform gl, \NormalMatrix \Matrix3fv mat4.toMat3 rot
 
-  # set matrix uniforms
-  gl.uniformMatrix3fv do
-    gl.getUniformLocation program, \NormalMatrix
-    false
-    mat4.toMat3 rot
+  uniform gl, \ProjectionMatrix \Matrix4fv \
+    mat4.perspective fov, width / height, distance - 1, distance + 3
 
   model-view = mat4.identity!
   mat4.translate model-view, [0,0, -(distance + 1)]
-  mat4.multiply model-view, rot
-  mat4.multiply model-view, staging
+  mat4.multiply  model-view, rot
+  if mode is not \donut
+    mat4.multiply  model-view, model.staging
 
-  gl.uniformMatrix4fv do
-    gl.getUniformLocation program, \ModelViewMatrix
-    false
-    model-view
+  uniform gl, \ModelViewMatrix \Matrix4fv model-view
 
-  #if shading is \gouraud
-    #gl.bindBuffer ELEMENT_ARRAY_BUFFER, triangles-buffer
-    #gl.drawElements TRIANGLES, triangles.length, UNSIGNED_SHORT, 0
-  #else # flat
-  gl.bindBuffer ARRAY_BUFFER, vertices-buffer
-  gl.drawArrays TRIANGLES, 0, triangles.length
+  if mode is \donut
+    gl.bindBuffer ARRAY_BUFFER, buffers.theta
+    gl.drawArrays TRIANGLES, 0, thetas.length
+  else
+    gl.bindBuffer ARRAY_BUFFER, buffers.vertices
+    gl.drawArrays TRIANGLES, 0, model.triangles.length
 
-# read the input file
-parse = !->
-  if @files.0
-    new FileReader
-      &readAsText that
-      &onload = !->
-        tokens = @result.split /\s+/ .map parseFloat
-        [num-triangles, num-vertices] = tokens.splice 0, 2
+initial-mode = mode
 
-        triangles := new Uint16Array tokens.splice 0 num-triangles * 3
-        vertices := new Float32Array tokens.splice 0 num-vertices * 3
+reading \donut-texture \AsBinaryString !->
+  textures.donut = read-ppm gl, it
 
-        if shading is \flat
-          do flat-program
-        else
-          do gouraud-program
-        do calculate-normals-and-flats
-        do setup-buffers
-        do reset-stage
-        do draw
+  reset-stage!
 
-$ \file
-  &addEventListener \change parse
-  # on refresh, if some file is still selected, do parse
-  parse.call (&)
+  $ \donut .disabled = false
+  # switch mode
+  if initial-mode is \donut then $ \donut .click!
+
+reading \env-texture \AsBinaryString !->
+  textures.environment = read-ppm gl, it
+
+  reset-stage!
+
+  $ \environment .disabled = false
+  # switch mode
+  if initial-mode is \environment then $ \environment .click!
+
+reading \threedee-texture \AsArrayBuffer !->
+  textures.threedee = flatten3d gl, it
+
+  reset-stage!
+
+  $ \threedee .disabled = false
+  # switch mode
+  if initial-mode is \threedee then $ \threedee .click!
+
+reading \file \AsText !->
+  tokens = it.split /\s+/ .map parseFloat
+  [num-triangles, num-vertices] = tokens.splice 0, 2
+
+  model.triangles = new Uint16Array  tokens.splice 0 num-triangles * 3
+  model.vertices  = new Float32Array tokens.splice 0 num-vertices  * 3
+
+  reset-stage!
+  calculate-normals-and-flats!
+  model.loaded = true
+
+  $ \flat    .disabled = false
+  $ \gouraud .disabled = false
+  # switch mode to display actual model
+  if initial-mode is not \donut then $ mode .click!
+
+# handling mouse rotation
 
 point-under = (x,y) ->
   {left, top} = canvas.getBoundingClientRect!
 
   # normalize to [-1, 1]
-  x = (x - left) * 2 / (width - 1) - 1
-  y = -((y - top) * 2 / (height - 1) - 1)
+  x =   (x - left) * 2 / (width - 1 ) - 1
+  y = -((y - top ) * 2 / (height - 1) - 1)
 
   det = 1 - x*x - y*y
 
@@ -438,10 +290,9 @@ point-under = (x,y) ->
   else
     [x / Math.sqrt(x*x + y*y), y / Math.sqrt(x*x + y*y), 0]
 
-# mouse rotation
 canvas
   &addEventListener \mousedown !({clientX: i0, clientY: j0}) ->
-    return unless current-rot?
+    return unless is-ready!
     &style.cursor = \move
 
     p = point-under i0, j0

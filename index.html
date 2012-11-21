@@ -4,28 +4,39 @@
 <title>Webjelly: 3D strong</title>
 
 <style>
-  input, button, label { cursor: pointer }
+  input:not(:disabled), button, label { cursor: pointer }
   #canvas { cursor: pointer }
+  #texture { list-style-type: none; padding-left: 0 }
 </style>
 
 <h1>Webjelly</h1>
 
-<p>Webjelly renders things! Try it out!
-<p>Select an input file:
-  <input type=file id=file>
+<p>Webjelly renders things! Try it out! Special texture modes are disabled
+   until a model and a texture are loaded, so select a file first!
 
-<div>
-  <button id=zoom-in type=button>Zoom in</button>
-  <button id=zoom-out type=button>Zoom out</button>
-  <span>Shading:
-    <label><input id=flat type=radio name=shading>Flat</label>
-    <label><input id=gouraud type=radio name=shading checked>Gouraud</label>
-  </span>
-  <span>, Triangle Orientation:
-    <label><input id=front type=radio name=orientation checked>Front</label>
-    <label><input id=back type=radio name=orientation>Back</label>
-  </span>
-</div>
+<form id=controls action=#>
+  <p>Select a model: <input type=file id=file>
+  <div>Texture:
+    <ul id=texture>
+      <li><label><input type=radio id=flat        name=texture disabled        >Plain Flat</label>
+      <li><label><input type=radio id=gouraud     name=texture disabled checked>Plain Gouraud</label>
+      <li><label><input type=radio id=environment name=texture disabled        >Environment Map</label>
+          <label>(File: <input type=file id=env-texture>)</label>
+      <li><label><input type=radio id=threedee    name=texture disabled        >3D</label>
+          <label>(File: <input type=file id=threedee-texture>)</label>
+      <li><label><input id=donut type=radio       name=texture disabled        >Tiled Donut</label>
+          <label>(File: <input type=file id=donut-texture>)</label>
+    </ul>
+  </div>
+  <div>
+    <button id=zoom-in  type=button>Zoom in</button>
+    <button id=zoom-out type=button>Zoom out</button>
+    <span>Triangle Orientation:
+      <label><input id=front type=radio name=orientation checked>Front</label>
+      <label><input id=back  type=radio name=orientation        >Back</label>
+    </span>
+  </div>
+</form>
 
 <div>
   <canvas id=canvas width=500 height=500>
@@ -33,12 +44,16 @@
   </canvas>
 </div>
 
-<small>
-  &copy; 2012 Steven Ruppert. You can also view
-  <a href=https://github.com/blendmaster/webjelly>webjelly on Github</a>.
-</small>
+<footer>
+  <small>
+    &copy; 2012 Steven Ruppert. You can also view
+    <a href=https://github.com/blendmaster/webjelly>webjelly on Github</a>.
+  </small>
+</footer>
 
 <script src=webgl-debug.js></script>
 <script src=gl-matrix-min.js></script>
 <script src=utils.js></script>
+<script src=programs.js></script>
 <script src=webjelly.js></script>
+
