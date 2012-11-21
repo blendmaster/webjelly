@@ -12,13 +12,15 @@ canvas = document.getElementById \canvas
 {width, height} = canvas
 
 try
-  window.gl = WebGLDebugUtils.makeDebugContext do
+  window.gl =
     canvas.getContext \webgl or canvas.getContext \experimental-webgl
 
 if gl!?
   alert "Sorry, it looks like your browser doesn't support WebGL, or webGL is \
     disabled!"
   throw new Error "no webgl ;_;"
+
+window.gl = WebGLDebugUtils.makeDebugContext gl
 
 # I don't like typing in gl all the time, so I will attach CONSTANTS to the
 # global context. Don't do this at home, kids.

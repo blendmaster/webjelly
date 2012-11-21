@@ -6,12 +6,13 @@ original commented source there. */
   canvas = document.getElementById('canvas');
   width = canvas.width, height = canvas.height;
   try {
-    window.gl = WebGLDebugUtils.makeDebugContext(canvas.getContext('webgl') || canvas.getContext('experimental-webgl'));
+    window.gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
   } catch (e$) {}
   if (typeof gl == 'undefined' || gl === null) {
     alert("Sorry, it looks like your browser doesn't support WebGL, or webGL is disabled!");
     throw new Error("no webgl ;_;");
   }
+  window.gl = WebGLDebugUtils.makeDebugContext(gl);
   for (k in ref$ = gl) {
     v = ref$[k];
     if (/^[A-Z_]+$/.test(k)) {
